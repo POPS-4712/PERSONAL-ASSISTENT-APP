@@ -8,68 +8,93 @@
       "name": "Ejecutar ahora",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-1320, 120]
+      "position": [
+        -1320,
+        120
+      ]
     },
     {
       "parameters": {
-        "rule": { "interval": [ { "field": "days", "triggerAtHour": 7, "triggerAtMinute": 30 } ] }
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 7,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
       },
       "id": "trigger-schedule",
       "name": "Cada mañana 07:30",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-1320, 320]
+      "position": [
+        -1320,
+        320
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const fs = require('fs');\nconst DIR = '/files/config';\nlet user = { selections: {}, ubicacion_laboral: '' };\nlet modules = {};\ntry { user = JSON.parse(fs.readFileSync(DIR + '/user_profile.json', 'utf8')); } catch (e) {}\ntry { modules = JSON.parse(fs.readFileSync(DIR + '/modules.json', 'utf8')); } catch (e) {}\n\nconst pick = (dim) => Array.isArray(user.selections && user.selections[dim]) ? user.selections[dim] : [];\nconst find = (list, id) => (list || []).find((o) => o && o.id === id);\n\nconst idiomaId = pick('idioma')[0] || 'espanol';\nconst idioma = (find(modules.idioma, idiomaId) && find(modules.idioma, idiomaId).valores.codigo) || 'es';\n\nconst kwFormacion = pick('formacion').flatMap((id) => {\n  const m = find(modules.formacion, id);\n  return (m && m.valores && m.valores.keywords_linkedin) || [];\n});\nconst kwSector = pick('sector_interes').flatMap((id) => {\n  const m = find(modules.sector_interes, id);\n  return (m && m.valores && m.valores.industrias) || [];\n});\nconst keywords = [...new Set([...kwFormacion, ...kwSector])].slice(0, 8).join(',');\n\nconst formacionNombre = (find(modules.formacion, pick('formacion')[0]) || {}).nombre || 'ingeniería';\nconst objetivoNombre = (find(modules.objetivo_profesional, pick('objetivo_profesional')[0]) || {}).nombre || 'primer empleo';\nconst location = user.ubicacion_laboral || 'Barcelona';\n\nreturn [{ json: { profile: {\n  idioma,\n  keywords: keywords || 'Engineer,Analyst,Operations',\n  location,\n  perfil_texto: 'Profesional de ' + formacionNombre + ' con objetivo: ' + objetivoNombre + '. Ubicación: ' + location + '.',\n} } }];\n"
+        "jsCode": "// Lee config/user_profile.json + modules.json y resuelve:\n//   - keywords     -> frases de búsqueda para el scraper\n//   - include_terms -> palabras para FILTRAR y PUNTUAR ofertas (derivadas\n//                      de sector_interes.industrias + formacion.keywords_linkedin)\n//   - location, idioma, perfil_texto\nconst fs = require('fs');\nconst DIR = '/files/config';\nlet user = { selections: {}, ubicacion_laboral: '' };\nlet modules = {};\ntry { user = JSON.parse(fs.readFileSync(DIR + '/user_profile.json', 'utf8')); } catch (e) {}\ntry { modules = JSON.parse(fs.readFileSync(DIR + '/modules.json', 'utf8')); } catch (e) {}\n\nconst pick = (dim) => Array.isArray(user.selections && user.selections[dim]) ? user.selections[dim] : [];\nconst find = (list, id) => (list || []).find((o) => o && o.id === id);\nconst noAcc = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n\nconst idiomaId = pick('idioma')[0] || 'espanol';\nconst idioma = (find(modules.idioma, idiomaId) && find(modules.idioma, idiomaId).valores.codigo) || 'es';\n\nconst kwFormacion = pick('formacion').flatMap((id) => {\n  const m = find(modules.formacion, id);\n  return (m && m.valores && m.valores.keywords_linkedin) || [];\n});\nconst kwSector = pick('sector_interes').flatMap((id) => {\n  const m = find(modules.sector_interes, id);\n  return (m && m.valores && m.valores.industrias) || [];\n});\n\nconst keywords = [...new Set([...kwFormacion, ...kwSector])].slice(0, 8).join(',');\n\nconst include_terms = [...new Set(\n  [...kwFormacion, ...kwSector]\n    .flatMap((t) => { const n = noAcc(t); return [n, ...n.split(/[^a-z0-9]+/)]; })\n    .filter((w) => w.length > 2)\n)];\n\nconst formacionNombre = (find(modules.formacion, pick('formacion')[0]) || {}).nombre || 'ingeniería';\nconst objetivoNombre = (find(modules.objetivo_profesional, pick('objetivo_profesional')[0]) || {}).nombre || 'primer empleo';\nconst sectoresNombre = pick('sector_interes')\n  .map((id) => (find(modules.sector_interes, id) || {}).nombre).filter(Boolean).join(', ');\nconst location = user.ubicacion_laboral || 'Barcelona';\n\nreturn [{ json: { profile: {\n  idioma,\n  keywords: keywords || 'Engineer,Analyst,Operations',\n  include_terms,\n  location,\n  sectores: sectoresNombre || '—',\n  perfil_texto: 'Profesional de ' + formacionNombre + ' con objetivo: ' + objetivoNombre\n    + (sectoresNombre ? '. Sectores de interés: ' + sectoresNombre : '') + '. Ubicación: ' + location + '.',\n} } }];\n"
       },
       "id": "cargar-perfil",
       "name": "Cargar perfil",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1100, 220]
+      "position": [
+        -1100,
+        220
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{ $env.PLAYWRIGHT_BASE_URL }}/scrape",
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [ { "name": "Content-Type", "value": "application/json" } ] },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  keywords: $json.profile.keywords,\n  location: $json.profile.location,\n  maxJobs: 40\n}) }}",
-        "options": { "timeout": 120000 }
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  keywords: $json.profile.keywords,\n  location: $json.profile.location,\n  maxJobs: 40\n}) }}",
+        "options": {
+          "timeout": 120000
+        }
       },
       "id": "scraper",
       "name": "Scraper Playwright",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [-880, 220],
+      "typeVersion": 4.3,
+      "position": [
+        -880,
+        220
+      ],
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 3000
     },
     {
       "parameters": {
-        "jsCode": "// El scraper devuelve { ok, source, jobs: [...] }. Un item por oferta.\nconst r = $input.first().json || {};\nconst jobs = Array.isArray(r.jobs) ? r.jobs : [];\nconst source = r.source || 'desconocido';\nif (jobs.length === 0) return [{ json: { __sinOfertas: true, motivo: 'el scraper no devolvió ofertas', source } }];\nreturn jobs.map((j) => ({ json: { ...j, source } }));\n"
+        "jsCode": "// El scraper devuelve { ok, source, jobs: [...] }. Un item por oferta.\nconst r = $input.first().json || {};\nconst jobs = Array.isArray(r.jobs) ? r.jobs : [];\nconst source = r.source || 'desconocido';\nif (jobs.length === 0) {\n  return [{ json: { __sinOfertas: true, motivo: 'el scraper no devolvió ofertas (source: ' + source + ')', source } }];\n}\nreturn jobs.map((j) => ({ json: { ...j, source } }));\n"
       },
       "id": "extraer",
       "name": "Extraer ofertas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-660, 220]
+      "position": [
+        -660,
+        220
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Filtra ofertas claramente fuera de objetivo (roles y ubicación).\nconst INCLUDE = ['engineer','engineering','analyst','operations','supply chain','logistics','project','program','product','data','software','developer','consultant','consulting','strategy','automation','manufacturing','industrial','process','planning','transformation','innovation','graduate','junior','trainee','intern','associate','ai','machine learning','cloud','devops','backend','full stack'];\nconst EXCLUDE = ['sales representative','account executive','call center','teleoperador','camarero','waiter','kitchen','limpieza','cleaner','conductor','driver','repartidor','beca no remunerada','unpaid'];\n\nconst pass = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (j.__sinOfertas) { pass.push({ json: j }); continue; }\n  const hay = ((j.title || '') + ' ' + (j.descriptionSnippet || '')).toLowerCase();\n  if (EXCLUDE.some((w) => hay.includes(w))) continue;\n  if (!INCLUDE.some((w) => hay.includes(w))) continue;\n  pass.push({ json: j, pairedItem: item.pairedItem });\n}\nreturn pass;\n"
+        "jsCode": "// Filtro guiado por el PERFIL: mantiene ofertas cuyo título/empresa encaja\n// con los términos derivados de sector_interes + formacion del usuario.\n// EXCLUDE es fijo (basura que nunca interesa).\nconst prof = $('Cargar perfil').first().json.profile;\nconst INCLUDE = (prof.include_terms && prof.include_terms.length)\n  ? prof.include_terms\n  : ['engineer', 'analyst', 'developer', 'software', 'data', 'operations', 'project', 'consultant'];\nconst EXCLUDE = ['sales representative', 'account executive', 'call center', 'teleoperador', 'camarero',\n  'waiter', 'kitchen', 'limpieza', 'cleaner', 'conductor', 'repartidor', 'mozo de almacen',\n  'beca no remunerada', 'unpaid', 'comercial telefonico'];\nconst noAcc = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n\nconst pass = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (j.__sinOfertas) { pass.push({ json: j }); continue; }\n  const hay = noAcc((j.title || '') + ' ' + (j.company || '') + ' ' + (j.descriptionSnippet || ''));\n  if (EXCLUDE.some((w) => hay.includes(w))) continue;\n  const matched = INCLUDE.filter((w) => hay.includes(w));\n  if (matched.length === 0) continue;\n  pass.push({ json: { ...j, __matched: matched.slice(0, 6) }, pairedItem: item.pairedItem });\n}\nreturn pass;\n"
       },
       "id": "filtrar",
-      "name": "Filtrar objetivo",
+      "name": "Filtrar por perfil",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-440, 220]
+      "position": [
+        -440,
+        220
+      ]
     },
     {
       "parameters": {
@@ -79,38 +104,56 @@
       "name": "Deduplicar ofertas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-220, 220]
+      "position": [
+        -220,
+        220
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Puntuación determinista 0-100.\nconst ROLE_SCORES = { 'aerospace':30,'aeroespacial':30,'space':25,'espacio':25,'artificial intelligence':25,'inteligencia artificial':25,'machine learning':22,'automation':20,'digital transformation':20,'supply chain':18,'industrial engineer':18,'project manager':16,'project engineer':16,'program manager':15,'data':15,'operations':14,'business analyst':14,'consultant':13,'strategy':13,'software':12,'manufacturing':12,'logistics':11,'planning':11,'engineering':9,'engineer':7 };\nconst PRIORITY = ['airbus','boeing','indra','thales','gmv','sener','esa','nasa','spacex','siemens','honeywell','accenture','capgemini','mckinsey','bcg','deloitte','pwc','kpmg','ey','amazon','google','microsoft','sap','seat','nvidia','ibm'];\nconst JUNIOR = ['junior','graduate','trainee','intern','becario','entry level','associate','young talent'];\n\nfunction scoreOne(j) {\n  const hay = ((j.title || '') + ' ' + (j.descriptionSnippet || '')).toLowerCase();\n  const company = (j.company || '').toLowerCase();\n  let s = 5;\n  for (const [k, v] of Object.entries(ROLE_SCORES)) if (hay.includes(k)) s += v;\n  if (PRIORITY.some((c) => company.includes(c))) s += 20;\n  if (JUNIOR.some((k) => hay.includes(k))) s += 10;\n  if (j.postedAt) {\n    const days = (Date.now() - new Date(j.postedAt).getTime()) / 86400000;\n    if (days <= 3) s += 8; else if (days <= 7) s += 4;\n  }\n  return Math.max(0, Math.min(100, Math.round(s)));\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (j.__sinOfertas) { out.push({ json: j }); continue; }\n  out.push({ json: { ...j, score: scoreOne(j) }, pairedItem: item.pairedItem });\n}\nreturn out;\n"
+        "jsCode": "// Puntuación determinista 0-100. Incluye un ajuste por encaje con el perfil.\nconst noAcc = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\nconst ROLE_SCORES = { 'aerospace':30,'aeroespacial':30,'space':25,'espacio':25,'artificial intelligence':25,'inteligencia artificial':25,'machine learning':22,'automation':20,'digital transformation':20,'supply chain':18,'industrial engineer':18,'project manager':16,'project engineer':16,'program manager':15,'data':15,'operations':14,'business analyst':14,'consultant':13,'strategy':13,'software':12,'manufacturing':12,'logistics':11,'planning':11,'engineering':9,'engineer':7 };\nconst PRIORITY = ['airbus','boeing','indra','thales','gmv','sener','esa','nasa','spacex','siemens','honeywell','accenture','capgemini','mckinsey','bcg','deloitte','pwc','kpmg','ey','amazon','google','microsoft','sap','seat','nvidia','ibm'];\nconst JUNIOR = ['junior','graduate','trainee','intern','becario','entry level','associate','young talent'];\n\nconst includeTerms = $('Cargar perfil').first().json.profile.include_terms || [];\n\nfunction scoreOne(j) {\n  const hay = noAcc((j.title || '') + ' ' + (j.descriptionSnippet || ''));\n  const company = noAcc(j.company || '');\n  let s = 5;\n  for (const [k, v] of Object.entries(ROLE_SCORES)) if (hay.includes(k)) s += v;\n  if (PRIORITY.some((c) => company.includes(c))) s += 20;\n  if (JUNIOR.some((k) => hay.includes(k))) s += 10;\n  const perfilHits = includeTerms.filter((t) => hay.includes(t)).length;\n  s += Math.min(perfilHits * 6, 24);\n  if (j.postedAt) {\n    const days = (Date.now() - new Date(j.postedAt).getTime()) / 86400000;\n    if (days <= 3) s += 8; else if (days <= 7) s += 4;\n  }\n  return Math.max(0, Math.min(100, Math.round(s)));\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (j.__sinOfertas) { out.push({ json: j }); continue; }\n  out.push({ json: { ...j, score: scoreOne(j) }, pairedItem: item.pairedItem });\n}\nreturn out;\n"
       },
       "id": "scoring",
       "name": "Scoring de ofertas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [0, 220]
+      "position": [
+        0,
+        220
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const MIN_SCORE = 15;\nconst MAX = 3;\nconst rows = $input.all().map((i) => i.json).filter((j) => !j.__sinOfertas);\nconst top = rows.filter((j) => (j.score || 0) >= MIN_SCORE).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, MAX);\nif (top.length === 0) {\n  return [{ json: { __sinOfertas: true, motivo: 'ninguna oferta superó el umbral', evaluadas: rows.length } }];\n}\nreturn top.map((j) => ({ json: j }));\n"
+        "jsCode": "const MIN_SCORE = 15;\nconst MAX = 3;\nconst rows = $input.all().map((i) => i.json).filter((j) => !j.__sinOfertas);\nconst top = rows\n  .filter((j) => (j.score || 0) >= MIN_SCORE)\n  .sort((a, b) => (b.score || 0) - (a.score || 0))\n  .slice(0, MAX);\nif (top.length === 0) {\n  return [{ json: { __sinOfertas: true, motivo: 'ninguna oferta nueva superó el umbral de relevancia', evaluadas: rows.length } }];\n}\nreturn top.map((j) => ({ json: j }));\n"
       },
       "id": "top3",
       "name": "Seleccionar TOP 3",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 220]
+      "position": [
+        220,
+        220
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
           "conditions": [
             {
               "id": "c1",
               "leftValue": "={{ $json.__sinOfertas === true }}",
               "rightValue": "",
-              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -121,25 +164,28 @@
       "name": "¿Sin ofertas?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [440, 220]
+      "position": [
+        440,
+        220
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [ { "name": "Content-Type", "value": "application/json" } ] },
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_TOKEN_LABORAL }}/sendMessage",
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"🔍 <b>Búsqueda laboral completada</b>\\n\\nℹ️ Hoy no hay ofertas nuevas relevantes (\" + ($json.motivo || 'sin resultados') + \").\",\n  parse_mode: \"HTML\"\n}) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"🔍 <b>Búsqueda laboral</b>\\n\\nℹ️ Hoy no hay ofertas nuevas relevantes (\" + ($json.motivo || 'sin resultados') + \").\",\n  parse_mode: \"HTML\"\n}) }}",
         "options": {}
       },
       "id": "tg-sin",
       "name": "Telegram - Sin ofertas",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [680, 100],
+      "typeVersion": 4.3,
+      "position": [
+        680,
+        100
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
@@ -151,77 +197,236 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
           ]
         },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  contents: [{ parts: [{ text:\n    \"Eres el asistente de este perfil: \" + $('Cargar perfil').first().json.profile.perfil_texto + \" \" +\n    \"Explica en un máximo de 55 palabras, en el idioma de código '\" + $('Cargar perfil').first().json.profile.idioma + \"', \" +\n    \"por qué esta oferta encaja. No inventes datos. Devuelve solo JSON. \" +\n    \"Oferta: título=\" + $json.title + \", empresa=\" + $json.company + \", ubicación=\" + $json.location + \", extracto=\" + ($json.descriptionSnippet || '')\n  }] }],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"OBJECT\",\n      properties: { resumen: { type: \"STRING\" }, motivo_fit: { type: \"STRING\" } },\n      required: [\"resumen\", \"motivo_fit\"]\n    },\n    temperature: 0.3\n  }\n}) }}",
-        "options": {}
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": {{ JSON.stringify(\n            \"Eres el asistente de este perfil: \" + $('Cargar perfil').first().json.profile.perfil_texto +\n            \" Explica en un máximo de 45 palabras, en el idioma de código '\" + $('Cargar perfil').first().json.profile.idioma +\n            \"', por qué esta oferta puede encajar con el perfil. No inventes datos que no aparezcan en la oferta.\\n\\nOferta: título=\" + $json.title +\n            \", empresa=\" + $json.company + \", ubicación=\" + $json.location\n          ) }}\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"responseSchema\": {\n      \"type\": \"OBJECT\",\n      \"properties\": {\n        \"resumen\": { \"type\": \"STRING\" },\n        \"motivo_fit\": { \"type\": \"STRING\" }\n      },\n      \"required\": [\"resumen\", \"motivo_fit\"]\n    },\n    \"temperature\": 0.3\n  }\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 4000
+            }
+          }
+        }
       },
       "id": "gemini",
       "name": "Gemini - Resumir oferta",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [680, 300],
+      "typeVersion": 4.3,
+      "position": [
+        680,
+        300
+      ],
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "let g = {};\ntry {\n  const raw = ($json.candidates && $json.candidates[0] && $json.candidates[0].content\n    && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0]\n    && $json.candidates[0].content.parts[0].text) || '{}';\n  g = JSON.parse(raw);\n} catch (e) { g = {}; }\n\nlet job = {};\ntry { job = $('Seleccionar TOP 3').item.json; } catch (e) { job = {}; }\n\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst resumen = g.resumen || (job.descriptionSnippet || '').slice(0, 180) || 'Sin descripción.';\n\nreturn { json: {\n  title: esc(job.title || 'Oferta'),\n  company: esc(job.company || '—'),\n  location: esc(job.location || '—'),\n  score: job.score || 0,\n  link: job.link || '',\n  source: job.source || '',\n  resumen: esc(resumen),\n  motivo_fit: esc(g.motivo_fit || ''),\n} };\n"
+        "jsCode": "// Une (por índice) cada oferta del TOP 3 con su resumen de Gemini.\n// No depende de pairedItem: TOP 3 y Gemini mantienen el mismo orden y nº de items.\nconst jobs = $('Seleccionar TOP 3').all().map((i) => i.json).filter((j) => !j.__sinOfertas);\nconst resp = $input.all().map((i) => i.json);\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst out = [];\nfor (let i = 0; i < jobs.length; i++) {\n  const job = jobs[i];\n  let g = {};\n  try {\n    const r = resp[i];\n    const raw = r && r.candidates && r.candidates[0] && r.candidates[0].content\n      && r.candidates[0].content.parts && r.candidates[0].content.parts[0]\n      && r.candidates[0].content.parts[0].text;\n    if (raw) g = JSON.parse(raw);\n  } catch (e) {}\n  out.push({ json: {\n    title: esc(job.title || 'Oferta'),\n    company: esc(job.company || '—'),\n    location: esc(job.location || '—'),\n    score: job.score || 0,\n    link: job.link || '',\n    source: job.source || '',\n    resumen: esc(g.resumen || 'Resumen no disponible (Gemini no devolvió datos).'),\n    motivo_fit: esc(g.motivo_fit || ''),\n  } });\n}\nreturn out;\n"
       },
       "id": "fusionar",
       "name": "Fusionar oferta + resumen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Un único mensaje con el TOP de ofertas de hoy.\nconst items = $input.all().map((i) => i.json);\nif (items.length === 0) return [];\nconst prof = $('Cargar perfil').first().json.profile;\nconst fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });\n\nconst bloques = items.map((o, i) =>\n  `<b>${i + 1}. ${o.title}</b>\\n🏢 ${o.company}  ·  📍 ${o.location}\\n⭐ ${o.score}/100  ·  fuente: ${o.source}\\n\\n${o.resumen}` +\n  (o.motivo_fit ? `\\n🎯 ${o.motivo_fit}` : '') +\n  (o.link ? `\\n🔗 ${o.link}` : '')\n).join('\\n\\n━━━━━━━━━━\\n\\n');\n\nconst texto =\n  `💼 <b>OFERTAS DEL DÍA</b>\\n<i>${fecha}</i>\\n` +\n  `<i>sectores: ${prof.sectores} · ${prof.location}</i>\\n\\n` +\n  `━━━━━━━━━━\\n\\n${bloques}\\n\\n━━━━━━━━━━\\n` +\n  `<i>${items.length} oferta(s), las mejores por puntuación</i>`;\n\nreturn [{ json: { texto } }];\n"
+      },
+      "id": "digest",
+      "name": "Construir digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [ { "name": "Content-Type", "value": "application/json" } ] },
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_TOKEN_LABORAL }}/sendMessage",
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"💼 <b>\" + $json.title + \"</b>\\n\" +\n    \"🏢 \" + $json.company + \"\\n📍 \" + $json.location + \"\\n⭐ \" + $json.score + \"/100  ·  fuente: \" + $json.source + \"\\n\\n\" +\n    $json.resumen + ($json.motivo_fit ? \"\\n\\n🎯 \" + $json.motivo_fit : \"\") +\n    ($json.link ? \"\\n\\n🔗 \" + $json.link : \"\"),\n  parse_mode: \"HTML\",\n  disable_web_page_preview: false\n}) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: $json.texto,\n  parse_mode: \"HTML\",\n  disable_web_page_preview: true\n}) }}",
         "options": {}
       },
-      "id": "tg-oferta",
-      "name": "Telegram - Enviar oferta",
+      "id": "tg-ofertas",
+      "name": "Telegram - Enviar ofertas",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1120, 300],
+      "typeVersion": 4.3,
+      "position": [
+        1340,
+        300
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
     }
   ],
   "connections": {
-    "Ejecutar ahora": { "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]] },
-    "Cada mañana 07:30": { "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]] },
-    "Cargar perfil": { "main": [[{ "node": "Scraper Playwright", "type": "main", "index": 0 }]] },
-    "Scraper Playwright": { "main": [[{ "node": "Extraer ofertas", "type": "main", "index": 0 }]] },
-    "Extraer ofertas": { "main": [[{ "node": "Filtrar objetivo", "type": "main", "index": 0 }]] },
-    "Filtrar objetivo": { "main": [[{ "node": "Deduplicar ofertas", "type": "main", "index": 0 }]] },
-    "Deduplicar ofertas": { "main": [[{ "node": "Scoring de ofertas", "type": "main", "index": 0 }]] },
-    "Scoring de ofertas": { "main": [[{ "node": "Seleccionar TOP 3", "type": "main", "index": 0 }]] },
-    "Seleccionar TOP 3": { "main": [[{ "node": "¿Sin ofertas?", "type": "main", "index": 0 }]] },
-    "¿Sin ofertas?": {
+    "Ejecutar ahora": {
       "main": [
-        [{ "node": "Telegram - Sin ofertas", "type": "main", "index": 0 }],
-        [{ "node": "Gemini - Resumir oferta", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Cargar perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Gemini - Resumir oferta": { "main": [[{ "node": "Fusionar oferta + resumen", "type": "main", "index": 0 }]] },
-    "Fusionar oferta + resumen": { "main": [[{ "node": "Telegram - Enviar oferta", "type": "main", "index": 0 }]] }
+    "Cada mañana 07:30": {
+      "main": [
+        [
+          {
+            "node": "Cargar perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar perfil": {
+      "main": [
+        [
+          {
+            "node": "Scraper Playwright",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scraper Playwright": {
+      "main": [
+        [
+          {
+            "node": "Extraer ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer ofertas": {
+      "main": [
+        [
+          {
+            "node": "Filtrar por perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar por perfil": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar ofertas": {
+      "main": [
+        [
+          {
+            "node": "Scoring de ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scoring de ofertas": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar TOP 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar TOP 3": {
+      "main": [
+        [
+          {
+            "node": "¿Sin ofertas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sin ofertas?": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Sin ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini - Resumir oferta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Resumir oferta": {
+      "main": [
+        [
+          {
+            "node": "Fusionar oferta + resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fusionar oferta + resumen": {
+      "main": [
+        [
+          {
+            "node": "Construir digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir digest": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Enviar ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "settings": {
     "executionOrder": "v1",
@@ -230,6 +435,6 @@
     "saveDataSuccessExecution": "all"
   },
   "active": false,
-  "versionId": "a1b2c3d4-0002-4000-8000-000000000002",
+  "versionId": "a1b2c3d4-0002-4000-8000-000000000003",
   "meta": {}
 }

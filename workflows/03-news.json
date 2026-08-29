@@ -1,5 +1,4 @@
 {
-  "id": "0ikHqQCWMke67aoI",
   "name": "Asistente - Noticias",
   "nodes": [
     {
@@ -8,13 +7,18 @@
       "name": "Ejecutar ahora",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-1120, 120]
+      "position": [
+        -1120,
+        128
+      ]
     },
     {
       "parameters": {
         "rule": {
           "interval": [
-            { "field": "days", "triggerAtHour": 8, "triggerAtMinute": 0 }
+            {
+              "triggerAtHour": 8
+            }
           ]
         }
       },
@@ -22,7 +26,10 @@
       "name": "Cada mañana 08:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-1120, 320]
+      "position": [
+        -1120,
+        320
+      ]
     },
     {
       "parameters": {
@@ -32,7 +39,10 @@
       "name": "Cargar perfil",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-900, 220]
+      "position": [
+        -896,
+        224
+      ]
     },
     {
       "parameters": {
@@ -43,7 +53,10 @@
       "name": "RSS - Noticias",
       "type": "n8n-nodes-base.rssFeedRead",
       "typeVersion": 1.1,
-      "position": [-680, 220]
+      "position": [
+        -688,
+        224
+      ]
     },
     {
       "parameters": {
@@ -54,7 +67,10 @@
       "name": "Normalizar noticia",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-460, 220]
+      "position": [
+        -464,
+        224
+      ]
     },
     {
       "parameters": {
@@ -64,7 +80,10 @@
       "name": "Deduplicar noticias",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-240, 220]
+      "position": [
+        -240,
+        224
+      ]
     },
     {
       "parameters": {
@@ -74,33 +93,10 @@
       "name": "Máx. 5 por ejecución",
       "type": "n8n-nodes-base.limit",
       "typeVersion": 1,
-      "position": [-20, 220]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.GEMINI_MODEL }}:generateContent",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  contents: [{ parts: [{ text:\n    \"Resume la siguiente noticia en el idioma de código '\" + $('Cargar perfil').first().json.profile.idioma +\n    \"', de forma objetiva y sin inventar nada, en un máximo de \" + $('Cargar perfil').first().json.profile.max_palabras + \" palabras. \" +\n    \"Devuelve únicamente JSON.\\n\\nTítulo: \" + $json.title + \"\\nEnlace: \" + $json.link + \"\\nTexto: \" + $json.text\n  }] }],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"OBJECT\",\n      properties: {\n        titulo: { type: \"STRING\" },\n        resumen: { type: \"STRING\" },\n        relevancia: { type: \"STRING\" }\n      },\n      required: [\"titulo\", \"resumen\", \"relevancia\"]\n    }\n  }\n}) }}",
-        "options": {}
-      },
-      "id": "gemini",
-      "name": "Gemini - Resumir noticia",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [200, 220],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      "position": [
+        -16,
+        224
+      ]
     },
     {
       "parameters": {
@@ -111,70 +107,202 @@
       "name": "Validar JSON Gemini",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 220]
+      "position": [
+        640,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "8319148167",
+        "text": "={{ $json.texto }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1472,
+        224
+      ],
+      "id": "f26738fb-6f02-4ef5-aa5f-00ffea5a8247",
+      "name": "Send a text message",
+      "webhookId": "c6559a9f-ca4f-4a99-9a0d-cf64dfbbea54",
+      "credentials": {
+        "telegramApi": {
+          "id": "ME0L9as09vfow89m",
+          "name": "Telegram account"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "x-goog-api-key",
+              "value": "{{ $env.GEMINI_API_KEY }}"
+            }
           ]
         },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"📰 <b>\" + $json.titulo + \"</b>\\n\\n\" + $json.resumen + ($json.enlace ? \"\\n\\n🔗 \" + $json.enlace : \"\"),\n  parse_mode: \"HTML\",\n  disable_web_page_preview: false\n}) }}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": {{ JSON.stringify(\"Resume esta noticia en máximo 80 palabras en español. Devuelve titulo, resumen, relevancia (alta/media/baja), prioridad (1-5) y enlace.\\n\\nTítulo: \" + $json.title + \"\\nEnlace: \" + $json.link + \"\\nContenido: \" + $json.text) }}\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"responseSchema\": {\n      \"type\": \"OBJECT\",\n      \"properties\": {\n        \"titulo\": {\n          \"type\": \"STRING\"\n        },\n        \"resumen\": {\n          \"type\": \"STRING\"\n        },\n        \"relevancia\": {\n          \"type\": \"STRING\"\n        },\n        \"prioridad\": {\n          \"type\": \"INTEGER\"\n        },\n        \"enlace\": {\n          \"type\": \"STRING\"\n        }\n      },\n      \"required\": [\n        \"titulo\",\n        \"resumen\",\n        \"relevancia\",\n        \"prioridad\",\n        \"enlace\"\n      ]\n    }\n  }\n}",
         "options": {}
       },
-      "id": "telegram",
-      "name": "Telegram - Enviar noticia",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [640, 220],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      "typeVersion": 4.3,
+      "position": [
+        192,
+        224
+      ],
+      "id": "c190ef06-7d9f-4522-954c-696518fa3bd3",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nconst fecha = new Date().toLocaleDateString('es-ES', { \n  weekday: 'long', day: 'numeric', month: 'long' \n});\n\nconst bloques = items.map((n, i) => \n  `<b>${i + 1}. ${n.titulo}</b>\\n` +\n  `${n.resumen}\\n` +\n  `<a href=\"${n.enlace}\">🔗 Leer noticia</a>`\n).join('\\n\\n━━━━━━━━━━\\n\\n');\n\nconst texto = \n  `📰 <b>TUS NOTICIAS</b>\\n` +\n  `<i>${fecha}</i>\\n\\n` +\n  `━━━━━━━━━━\\n\\n` +\n  `${bloques}\\n\\n` +\n  `━━━━━━━━━━\\n` +\n  `<i>${items.length} noticias seleccionadas</i>`;\n\nreturn [{ json: { texto } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        224
+      ],
+      "id": "9f1b9968-5b6f-464c-99cc-40b7d593d414",
+      "name": "Code in JavaScript"
     }
   ],
+  "pinData": {},
   "connections": {
     "Ejecutar ahora": {
-      "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Cargar perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Cada mañana 08:00": {
-      "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Cargar perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Cargar perfil": {
-      "main": [[{ "node": "RSS - Noticias", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "RSS - Noticias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "RSS - Noticias": {
-      "main": [[{ "node": "Normalizar noticia", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Normalizar noticia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Normalizar noticia": {
-      "main": [[{ "node": "Deduplicar noticias", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Deduplicar noticias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Deduplicar noticias": {
-      "main": [[{ "node": "Máx. 5 por ejecución", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Máx. 5 por ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Máx. 5 por ejecución": {
-      "main": [[{ "node": "Gemini - Resumir noticia", "type": "main", "index": 0 }]]
-    },
-    "Gemini - Resumir noticia": {
-      "main": [[{ "node": "Validar JSON Gemini", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validar JSON Gemini": {
-      "main": [[{ "node": "Telegram - Enviar noticia", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Validar JSON Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "saveManualExecutions": true,
     "saveDataErrorExecution": "all",
     "saveDataSuccessExecution": "all"
   },
-  "active": false,
-  "versionId": "a1b2c3d4-0001-4000-8000-000000000001",
-  "meta": {}
+  "versionId": "f7c30c2b-0c9c-4699-a7c4-de496b1628f8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "055f7ba4abc952d024eca101b02c7691b8cced7c815ac2a16117361afe9f5962"
+  },
+  "id": "0ikHqQCWMke67aoI",
+  "tags": []
 }

@@ -62,9 +62,13 @@ services:
       NODE_FUNCTION_ALLOW_BUILTIN: "fs"
       # --- secrets consumed by workflow HTTP nodes ---
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      # Un bot de Telegram por workflow (ver CREDENCIALES.md).
+      TELEGRAM_NOTICIAS_TOKEN: ${TELEGRAM_NOTICIAS_TOKEN:-}
+      TELEGRAM_TOKEN_MARCA: ${TELEGRAM_TOKEN_MARCA:-}
+      TELEGRAM_TOKEN_LABORAL: ${TELEGRAM_TOKEN_LABORAL:-}
+      TELEGRAM_TOKEN_EMAIL: ${TELEGRAM_TOKEN_EMAIL:-}
       PLAYWRIGHT_BASE_URL: http://playwright:3000
       PROFILE_API_URL: http://profile:7777
     volumes:

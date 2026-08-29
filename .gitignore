@@ -13,3 +13,5 @@ Thumbs.db
 
 # Borradores generados
 output/**/*.md
+
+.env

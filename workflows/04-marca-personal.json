@@ -8,17 +8,31 @@
       "name": "Ejecutar ahora",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-1140, 120]
+      "position": [
+        -1140,
+        120
+      ]
     },
     {
       "parameters": {
-        "rule": { "interval": [ { "field": "days", "triggerAtHour": 8, "triggerAtMinute": 15 } ] }
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 8,
+              "triggerAtMinute": 15
+            }
+          ]
+        }
       },
       "id": "trigger-schedule",
       "name": "Cada mañana 08:15",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-1140, 320]
+      "position": [
+        -1140,
+        320
+      ]
     },
     {
       "parameters": {
@@ -28,7 +42,10 @@
       "name": "Cargar perfil",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-920, 220]
+      "position": [
+        -920,
+        220
+      ]
     },
     {
       "parameters": {
@@ -39,7 +56,10 @@
       "name": "RSS - Fuente",
       "type": "n8n-nodes-base.rssFeedRead",
       "typeVersion": 1.1,
-      "position": [-700, 220],
+      "position": [
+        -700,
+        220
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -51,7 +71,10 @@
       "name": "Normalizar fuente",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-480, 220]
+      "position": [
+        -480,
+        220
+      ]
     },
     {
       "parameters": {
@@ -61,15 +84,23 @@
       "name": "Deduplicar fuentes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-260, 220]
+      "position": [
+        -260,
+        220
+      ]
     },
     {
-      "parameters": { "maxItems": 3 },
+      "parameters": {
+        "maxItems": 3
+      },
       "id": "limitar",
       "name": "Máx. 3 por ejecución",
       "type": "n8n-nodes-base.limit",
       "typeVersion": 1,
-      "position": [-40, 220]
+      "position": [
+        -40,
+        220
+      ]
     },
     {
       "parameters": {
@@ -78,21 +109,25 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
           ]
         },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  contents: [{ parts: [{ text:\n    \"Redacta un borrador de post de LinkedIn en el idioma de código '\" + $('Cargar perfil').first().json.profile.idioma + \"'. \" +\n    \"Máximo 1000 caracteres. Tono: \" + $('Cargar perfil').first().json.profile.tono + \". \" +\n    \"Temas de referencia: \" + $('Cargar perfil').first().json.profile.temas + \". \" +\n    \"No inventes cifras ni hechos; es un borrador para revisar. \" +\n    \"Noticia: \" + $json.title + \". Enlace: \" + $json.link + \". Contexto: \" + $json.text\n  }] }],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"OBJECT\",\n      properties: {\n        titulo: { type: \"STRING\" },\n        borrador_linkedin: { type: \"STRING\" },\n        hashtags: { type: \"ARRAY\", items: { type: \"STRING\" } }\n      },\n      required: [\"titulo\", \"borrador_linkedin\", \"hashtags\"]\n    },\n    temperature: 0.7\n  }\n}) }}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": {{ JSON.stringify(\n            \"Redacta un borrador de post de LinkedIn en el idioma de código '\" + $('Cargar perfil').first().json.profile.idioma +\n            \"'. Máximo 1000 caracteres. Tono: \" + $('Cargar perfil').first().json.profile.tono +\n            \" Temas de referencia: \" + $('Cargar perfil').first().json.profile.temas +\n            \". No inventes cifras ni hechos; es un borrador para revisar.\\n\\nNoticia: \" + $json.title +\n            \"\\nEnlace: \" + $json.link + \"\\nContexto: \" + $json.text\n          ) }}\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"responseSchema\": {\n      \"type\": \"OBJECT\",\n      \"properties\": {\n        \"titulo\": { \"type\": \"STRING\" },\n        \"borrador_linkedin\": { \"type\": \"STRING\" },\n        \"hashtags\": { \"type\": \"ARRAY\", \"items\": { \"type\": \"STRING\" } }\n      },\n      \"required\": [\"titulo\", \"borrador_linkedin\", \"hashtags\"]\n    },\n    \"temperature\": 0.7\n  }\n}",
         "options": {}
       },
       "id": "gemini",
       "name": "Gemini - Borrador LinkedIn",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [180, 220],
+      "typeVersion": 4.3,
+      "position": [
+        180,
+        220
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
@@ -100,46 +135,172 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const fs = require('fs');\nconst DIR = '/files/output/marca-personal';\ntry { fs.mkdirSync(DIR, { recursive: true }); } catch (e) {}\n\nlet data;\ntry {\n  const raw = ($json.candidates && $json.candidates[0] && $json.candidates[0].content\n    && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0]\n    && $json.candidates[0].content.parts[0].text) || '{}';\n  data = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Respuesta de Gemini no es JSON válido: ' + e.message);\n}\nif (!data.titulo || !data.borrador_linkedin) {\n  throw new Error('Borrador incompleto de Gemini');\n}\n\nlet fuente = '';\ntry { fuente = $('Normalizar fuente').item.json.link || ''; } catch (e) {}\n\nconst tags = Array.isArray(data.hashtags) ? data.hashtags.join(' ') : String(data.hashtags || '');\nconst fecha = new Date().toISOString().slice(0, 10);\nconst slug = String(data.titulo).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'borrador';\nconst ruta = DIR + '/' + fecha + '_' + slug + '.md';\n\nconst md = '# ' + data.titulo + '\\n\\n'\n  + '> Borrador generado el ' + fecha + '. Revísalo antes de publicar.\\n\\n'\n  + data.borrador_linkedin + '\\n\\n'\n  + (tags ? tags + '\\n\\n' : '')\n  + (fuente ? 'Fuente: ' + fuente + '\\n' : '');\n\ntry { fs.writeFileSync(ruta, md, 'utf8'); } catch (e) { throw new Error('No se pudo escribir ' + ruta + ': ' + e.message); }\n\nreturn { json: {\n  titulo: data.titulo,\n  ruta,\n  preview: data.borrador_linkedin.slice(0, 280),\n  fuente,\n} };\n"
+        "jsCode": "// Parsea la respuesta de Gemini (candidates[0].content.parts[0].text),\n// guarda el borrador como .md y devuelve los metadatos para el aviso.\n// El ENLACE se toma del nodo de normalización, no de Gemini.\nconst fs = require('fs');\nconst DIR = '/files/output/marca-personal';\ntry { fs.mkdirSync(DIR, { recursive: true }); } catch (e) {}\n\nlet data;\ntry {\n  const raw = ($json.candidates && $json.candidates[0] && $json.candidates[0].content\n    && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0]\n    && $json.candidates[0].content.parts[0].text) || '{}';\n  data = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Respuesta de Gemini no es JSON válido: ' + e.message);\n}\nif (!data.titulo || !data.borrador_linkedin) {\n  throw new Error('Borrador incompleto de Gemini');\n}\n\nlet fuente = '';\ntry { fuente = $('Normalizar fuente').item.json.link || ''; } catch (e) {}\n\nconst tags = Array.isArray(data.hashtags) ? data.hashtags.join(' ') : String(data.hashtags || '');\nconst fecha = new Date().toISOString().slice(0, 10);\nconst slug = String(data.titulo).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'borrador';\nconst ruta = DIR + '/' + fecha + '_' + slug + '.md';\n\nconst md = '# ' + data.titulo + '\\n\\n'\n  + '> Borrador generado el ' + fecha + '. Revísalo antes de publicar.\\n\\n'\n  + data.borrador_linkedin + '\\n\\n'\n  + (tags ? tags + '\\n\\n' : '')\n  + (fuente ? 'Fuente: ' + fuente + '\\n' : '');\n\ntry { fs.writeFileSync(ruta, md, 'utf8'); } catch (e) { throw new Error('No se pudo escribir ' + ruta + ': ' + e.message); }\n\nreturn { json: {\n  titulo: data.titulo,\n  ruta,\n  preview: data.borrador_linkedin.slice(0, 240),\n  fuente,\n} };\n"
       },
       "id": "guardar",
       "name": "Validar y guardar borrador",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 220]
+      "position": [
+        400,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Un único mensaje-resumen con todos los borradores generados en esta ejecución.\nconst items = $input.all().map((i) => i.json);\nif (items.length === 0) return [];\n\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });\n\nconst bloques = items.map((b, i) =>\n  `<b>${i + 1}. ${esc(b.titulo)}</b>\\n${esc(b.preview)}…\\n📄 <code>${esc(b.ruta)}</code>`\n).join('\\n\\n━━━━━━━━━━\\n\\n');\n\nconst texto =\n  `✍️ <b>BORRADORES LINKEDIN</b>\\n<i>${fecha}</i>\\n\\n` +\n  `━━━━━━━━━━\\n\\n${bloques}\\n\\n━━━━━━━━━━\\n` +\n  `<i>${items.length} borrador(es) en output/marca-personal/</i>`;\n\nreturn [{ json: { texto } }];\n"
+      },
+      "id": "aviso",
+      "name": "Construir aviso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        220
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_TOKEN_MARCA }}/sendMessage",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [ { "name": "Content-Type", "value": "application/json" } ] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"✍️ <b>Borrador LinkedIn listo</b>\\n\\n\" + $json.titulo + \"\\n\\n\" +\n    $json.preview + \"…\\n\\n📄 \" + $json.ruta,\n  parse_mode: \"HTML\",\n  disable_web_page_preview: true\n}) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: $json.texto,\n  parse_mode: \"HTML\",\n  disable_web_page_preview: true\n}) }}",
         "options": {}
       },
       "id": "telegram",
-      "name": "Telegram - Aviso borrador",
+      "name": "Telegram - Aviso borradores",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [620, 220],
+      "typeVersion": 4.3,
+      "position": [
+        840,
+        220
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
     }
   ],
   "connections": {
-    "Ejecutar ahora": { "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]] },
-    "Cada mañana 08:15": { "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]] },
-    "Cargar perfil": { "main": [[{ "node": "RSS - Fuente", "type": "main", "index": 0 }]] },
-    "RSS - Fuente": { "main": [[{ "node": "Normalizar fuente", "type": "main", "index": 0 }]] },
-    "Normalizar fuente": { "main": [[{ "node": "Deduplicar fuentes", "type": "main", "index": 0 }]] },
-    "Deduplicar fuentes": { "main": [[{ "node": "Máx. 3 por ejecución", "type": "main", "index": 0 }]] },
-    "Máx. 3 por ejecución": { "main": [[{ "node": "Gemini - Borrador LinkedIn", "type": "main", "index": 0 }]] },
-    "Gemini - Borrador LinkedIn": { "main": [[{ "node": "Validar y guardar borrador", "type": "main", "index": 0 }]] },
-    "Validar y guardar borrador": { "main": [[{ "node": "Telegram - Aviso borrador", "type": "main", "index": 0 }]] }
+    "Ejecutar ahora": {
+      "main": [
+        [
+          {
+            "node": "Cargar perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada mañana 08:15": {
+      "main": [
+        [
+          {
+            "node": "Cargar perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar perfil": {
+      "main": [
+        [
+          {
+            "node": "RSS - Fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS - Fuente": {
+      "main": [
+        [
+          {
+            "node": "Normalizar fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar fuente": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar fuentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar fuentes": {
+      "main": [
+        [
+          {
+            "node": "Máx. 3 por ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Máx. 3 por ejecución": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Borrador LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Borrador LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Validar y guardar borrador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y guardar borrador": {
+      "main": [
+        [
+          {
+            "node": "Construir aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir aviso": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Aviso borradores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "settings": {
     "executionOrder": "v1",
@@ -148,6 +309,6 @@
     "saveDataSuccessExecution": "all"
   },
   "active": false,
-  "versionId": "a1b2c3d4-0004-4000-8000-000000000004",
+  "versionId": "a1b2c3d4-0004-4000-8000-000000000005",
   "meta": {}
 }
