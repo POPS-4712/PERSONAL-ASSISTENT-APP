@@ -1,0 +1,14 @@
+{
+  "name": "tdr-assistent-ia",
+  "private": true,
+  "scripts": {
+    "scrape": "node scraper.js",
+    "scrape:infojobs": "node infojobs.js",
+    "login": "npm --prefix playwright run login",
+    "process": "npm --prefix playwright run process",
+    "update": "npm --prefix playwright run update",
+    "test": "npm --prefix playwright test",
+    "check": "npm --prefix playwright run check",
+    "start": "npm --prefix playwright start"
+  }
+}

@@ -1,0 +1,140 @@
+# Personal Assistant
+
+Asistente personal construido sobre **n8n** + **Postgres** + un servicio de
+**scraping con Playwright** + un **editor de perfil web**, todo en contenedores
+Docker. Cuatro automatizaciones:
+
+| Workflow | Qué hace | Salida | Necesita |
+|---|---|---|---|
+| **Noticias** | feed de Google News según tus intereses → resumen con IA | Telegram | Gemini, Telegram |
+| **Marca Personal** | novedades de IA/tecnología → borrador de post de LinkedIn con tu tono | ficheros `.md` + aviso Telegram | Gemini, Telegram |
+| **Laboral** | scraping de ofertas (LinkedIn público / arbeitnow) → filtro + scoring + TOP 3 → por qué encaja | Telegram | Gemini, Telegram |
+| **Email** | lee tu Gmail → clasifica, resume y crea eventos de Calendar | Telegram + Google Calendar | Gemini, Telegram, **Google OAuth** |
+
+Los tres primeros funcionan solo con una API key de Gemini y un bot de Telegram.
+El de Email necesita además OAuth de Google. Todo el detalle en
+[CREDENCIALES.md](CREDENCIALES.md).
+
+---
+
+## Requisitos
+
+- **Docker Desktop** (Windows x64/ARM64, Linux, macOS).
+- API key de **Gemini** (gratis): <https://aistudio.google.com/app/apikey>
+- Un **bot de Telegram** (gratis): @BotFather.
+
+---
+
+## Puesta en marcha
+
+```powershell
+copy .env.example .env
+# edita .env: GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+#             POSTGRES_PASSWORD y N8N_ENCRYPTION_KEY (cadenas largas aleatorias)
+
+.\scripts\setup.ps1
+```
+
+`setup.ps1` es **idempotente**: detecta Docker, construye las imágenes, arranca
+todo (postgres, n8n, playwright, profile), espera a que esté listo e importa los
+4 workflows. Relánzalo cuando quieras.
+
+Servicios (todos en localhost, solo accesibles desde tu equipo):
+
+| URL | Qué es |
+|---|---|
+| http://localhost:5678 | n8n — los workflows |
+| http://localhost:7777 | editor de perfil |
+
+Luego:
+
+1. Abre **http://localhost:5678** y crea la cuenta de propietario (local).
+2. Verás los 4 workflows importados.
+3. Ajusta tu perfil en **http://localhost:7777**.
+4. Abre cada workflow y pulsa **Execute workflow** para probarlo.
+5. Activa (toggle) los que quieras dejar en automático.
+
+Si editas `.env` después de arrancar: `docker compose up -d` recrea los
+contenedores con los nuevos valores.
+
+---
+
+## Horarios (cuando se activan)
+
+| Workflow | Programación |
+|---|---|
+| Laboral | cada día 07:30 |
+| Noticias | cada día 08:00 |
+| Marca Personal | cada día 08:15 |
+| Email | continuo (cada minuto revisa correos nuevos) |
+
+Se cambian en el nodo *Schedule Trigger* / *Gmail Trigger* de cada workflow.
+
+---
+
+## Personalizar el perfil
+
+Abre **http://localhost:7777** (servicio `profile`): una web para marcar tus
+opciones sin tocar ficheros. Al guardar escribe `config/user_profile.json`, que
+es lo que leen los workflows en cada ejecución (no hace falta reiniciar nada).
+
+Qué influye en qué:
+
+- **Idioma** + **Temas de noticias** → *Noticias* y *Marca Personal*
+- **Estilo de marca personal** → tono de los borradores de *Marca Personal*
+- **Formación** + **Sectores** + **Ubicación laboral** → búsqueda *Laboral*
+
+También puedes editar `config/user_profile.json` a mano (ids válidos en
+`config/modules.json`). El servicio expone además `GET /profile` con el perfil ya
+resuelto (ids → valores) por si se quiere consumir por HTTP.
+
+---
+
+## Estructura
+
+```
+docker-compose.yml          postgres + n8n + playwright + profile
+.env / .env.example         secretos (gitignored)
+CREDENCIALES.md             cómo obtener cada API key / OAuth
+config/
+  modules.json              catálogo de opciones
+  user_profile.json         tus selecciones (gitignored)
+playwright/
+  server.mjs + Dockerfile   servicio de scraping de empleo
+profile/
+  server.mjs                servicio + web para editar el perfil (:7777)
+  public/index.html
+  Dockerfile
+scripts/
+  setup.ps1                 arranque idempotente
+  db-init/                  esquema SQL inicial
+workflows/
+  01-email.json  02-laboral.json  03-news.json  04-marca-personal.json
+output/
+  marca-personal/           borradores .md generados
+```
+
+---
+
+## Comandos útiles
+
+```bash
+docker compose ps
+docker compose logs -f n8n
+docker compose logs -f playwright
+docker compose logs -f profile
+docker compose exec n8n n8n list:workflow
+docker compose exec n8n n8n import:workflow --separate --input=/files/workflows   # reimportar
+docker compose up -d --build   # reconstruir imágenes tras cambios
+docker compose down            # parar (datos conservados)
+docker compose down -v         # parar y BORRAR datos
+```
+
+---
+
+## Qué NO incluye (a propósito)
+
+Instalador `.exe`, panel de control web, registro de máquina, auto-updates,
+matriz de builds multiplataforma. Es un despliegue local reproducible con
+`docker compose`, que es lo que necesita el TDR. Esas piezas serían una fase
+posterior.

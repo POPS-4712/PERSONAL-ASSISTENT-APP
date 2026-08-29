@@ -1,0 +1,180 @@
+{
+  "id": "0ikHqQCWMke67aoI",
+  "name": "Asistente - Noticias",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Ejecutar ahora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1120, 120]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "days", "triggerAtHour": 8, "triggerAtMinute": 0 }
+          ]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Cada mañana 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1120, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lee el perfil del usuario (config/user_profile.json) y el catálogo\n// (config/modules.json), ambos montados en /files/config, y resuelve la\n// configuración concreta que consumen los nodos siguientes.\nconst fs = require('fs');\nconst DIR = '/files/config';\n\nlet user = { selections: {}, ubicacion_laboral: '' };\nlet modules = {};\ntry { user = JSON.parse(fs.readFileSync(DIR + '/user_profile.json', 'utf8')); } catch (e) {}\ntry { modules = JSON.parse(fs.readFileSync(DIR + '/modules.json', 'utf8')); } catch (e) {}\n\nconst pick = (dim) => Array.isArray(user.selections && user.selections[dim]) ? user.selections[dim] : [];\nconst find = (list, id) => (list || []).find((o) => o && o.id === id);\n\nconst idiomaId = pick('idioma')[0] || 'espanol';\nconst idioma = (find(modules.idioma, idiomaId) && find(modules.idioma, idiomaId).valores.codigo) || 'es';\n\nconst LOCALE = {\n  es: ['es', 'ES', 'ES:es'],\n  ca: ['ca', 'ES', 'ES:ca'],\n  en: ['en-US', 'US', 'US:en'],\n  fr: ['fr', 'FR', 'FR:fr'],\n  de: ['de', 'DE', 'DE:de'],\n};\nconst loc = LOCALE[idioma] || LOCALE.es;\nconst hl = loc[0], gl = loc[1], ceid = loc[2];\n\nconst cats = [...new Set(\n  pick('intereses_rss').flatMap((id) => {\n    const m = find(modules.intereses_rss, id);\n    return (m && m.valores && m.valores.categorias_feed) || [];\n  })\n)];\n\nconst query = cats.length ? '(' + cats.join(' OR ') + ')' : '(economía OR tecnología OR ciencia OR IA)';\nconst feed_url = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query)\n  + '&hl=' + hl + '&gl=' + gl + '&ceid=' + encodeURIComponent(ceid);\n\nconst estiloId = pick('estilo_marca_personal')[0];\nconst em = find(modules.estilo_marca_personal, estiloId);\nconst tono = (em && em.valores && em.valores.tono) || 'Claro, objetivo y sin adornos.';\n\nreturn [{ json: { profile: {\n  idioma,\n  feed_url,\n  tono,\n  max_palabras: 80,\n  categorias: cats,\n  ubicacion: user.ubicacion_laboral || '',\n} } }];\n"
+      },
+      "id": "cargar-perfil",
+      "name": "Cargar perfil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-900, 220]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.profile.feed_url }}",
+        "options": {}
+      },
+      "id": "rss-noticias",
+      "name": "RSS - Noticias",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [-680, 220]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const title = ($json.title || '').trim();\nconst link = $json.link || $json.guid || '';\nconst norm = title.toLowerCase()\n  .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-z0-9 ]/g, '').trim();\n\nreturn { json: {\n  title,\n  link,\n  item_key: 'news:' + norm,\n  source: 'news',\n  text: (title + ' ' + ($json.contentSnippet || $json.content || '')).slice(0, 2000),\n  isoDate: $json.isoDate || $json.pubDate || null,\n} };\n"
+      },
+      "id": "normalizar",
+      "name": "Normalizar noticia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicación persistente entre ejecuciones usando los datos estáticos\n// del workflow (se guardan en la BD interna de n8n). Sin tabla externa.\nconst store = $getWorkflowStaticData('global');\nconst seen = store.newsSeen || {};\nconst now = Date.now();\nconst TTL = 30 * 24 * 60 * 60 * 1000; // 30 días\n\nfor (const k of Object.keys(seen)) {\n  if (now - seen[k] > TTL) delete seen[k];\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const key = item.json.item_key;\n  if (!key || key === 'news:' || seen[key]) continue;\n  seen[key] = now;\n  out.push({ json: item.json, pairedItem: item.pairedItem });\n}\nstore.newsSeen = seen;\nreturn out;\n"
+      },
+      "id": "deduplicar",
+      "name": "Deduplicar noticias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 220]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "limitar",
+      "name": "Máx. 5 por ejecución",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [-20, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.GEMINI_MODEL }}:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  contents: [{ parts: [{ text:\n    \"Resume la siguiente noticia en el idioma de código '\" + $('Cargar perfil').first().json.profile.idioma +\n    \"', de forma objetiva y sin inventar nada, en un máximo de \" + $('Cargar perfil').first().json.profile.max_palabras + \" palabras. \" +\n    \"Devuelve únicamente JSON.\\n\\nTítulo: \" + $json.title + \"\\nEnlace: \" + $json.link + \"\\nTexto: \" + $json.text\n  }] }],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"OBJECT\",\n      properties: {\n        titulo: { type: \"STRING\" },\n        resumen: { type: \"STRING\" },\n        relevancia: { type: \"STRING\" }\n      },\n      required: [\"titulo\", \"resumen\", \"relevancia\"]\n    }\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "gemini",
+      "name": "Gemini - Resumir noticia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 220],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const esc = (s) => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nlet data;\ntry {\n  const raw = ($json.candidates && $json.candidates[0] && $json.candidates[0].content\n    && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0]\n    && $json.candidates[0].content.parts[0].text) || '{}';\n  data = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Respuesta de Gemini no es JSON válido: ' + e.message);\n}\nif (!data.titulo || !data.resumen) {\n  throw new Error('JSON de Gemini incompleto (falta titulo o resumen)');\n}\n\nlet enlace = '';\ntry { enlace = $('Normalizar noticia').item.json.link || ''; } catch (e) { enlace = ''; }\n\nreturn { json: {\n  titulo: esc(data.titulo),\n  resumen: esc(data.resumen),\n  relevancia: data.relevancia || '',\n  enlace,\n} };\n"
+      },
+      "id": "validar",
+      "name": "Validar JSON Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"📰 <b>\" + $json.titulo + \"</b>\\n\\n\" + $json.resumen + ($json.enlace ? \"\\n\\n🔗 \" + $json.enlace : \"\"),\n  parse_mode: \"HTML\",\n  disable_web_page_preview: false\n}) }}",
+        "options": {}
+      },
+      "id": "telegram",
+      "name": "Telegram - Enviar noticia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 220],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Ejecutar ahora": {
+      "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]]
+    },
+    "Cada mañana 08:00": {
+      "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]]
+    },
+    "Cargar perfil": {
+      "main": [[{ "node": "RSS - Noticias", "type": "main", "index": 0 }]]
+    },
+    "RSS - Noticias": {
+      "main": [[{ "node": "Normalizar noticia", "type": "main", "index": 0 }]]
+    },
+    "Normalizar noticia": {
+      "main": [[{ "node": "Deduplicar noticias", "type": "main", "index": 0 }]]
+    },
+    "Deduplicar noticias": {
+      "main": [[{ "node": "Máx. 5 por ejecución", "type": "main", "index": 0 }]]
+    },
+    "Máx. 5 por ejecución": {
+      "main": [[{ "node": "Gemini - Resumir noticia", "type": "main", "index": 0 }]]
+    },
+    "Gemini - Resumir noticia": {
+      "main": [[{ "node": "Validar JSON Gemini", "type": "main", "index": 0 }]]
+    },
+    "Validar JSON Gemini": {
+      "main": [[{ "node": "Telegram - Enviar noticia", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "active": false,
+  "versionId": "a1b2c3d4-0001-4000-8000-000000000001",
+  "meta": {}
+}

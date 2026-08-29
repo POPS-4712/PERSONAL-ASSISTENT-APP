@@ -1,0 +1,153 @@
+{
+  "id": "pa04marcapersonal",
+  "name": "Asistente - Marca Personal",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Ejecutar ahora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1140, 120]
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "days", "triggerAtHour": 8, "triggerAtMinute": 15 } ] }
+      },
+      "id": "trigger-schedule",
+      "name": "Cada mañana 08:15",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1140, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lee perfil + catálogo y devuelve UN item por feed RSS a vigilar,\n// cada uno con el perfil resuelto (idioma, tono, temas).\nconst fs = require('fs');\nconst DIR = '/files/config';\n\nlet user = { selections: {}, ubicacion_laboral: '' };\nlet modules = {};\ntry { user = JSON.parse(fs.readFileSync(DIR + '/user_profile.json', 'utf8')); } catch (e) {}\ntry { modules = JSON.parse(fs.readFileSync(DIR + '/modules.json', 'utf8')); } catch (e) {}\n\nconst pick = (dim) => Array.isArray(user.selections && user.selections[dim]) ? user.selections[dim] : [];\nconst find = (list, id) => (list || []).find((o) => o && o.id === id);\n\nconst idiomaId = pick('idioma')[0] || 'espanol';\nconst idioma = (find(modules.idioma, idiomaId) && find(modules.idioma, idiomaId).valores.codigo) || 'es';\nconst LOCALE = { es:['es','ES','ES:es'], ca:['ca','ES','ES:ca'], en:['en-US','US','US:en'], fr:['fr','FR','FR:fr'], de:['de','DE','DE:de'] };\nconst loc = LOCALE[idioma] || LOCALE.es;\n\nconst em = find(modules.estilo_marca_personal, pick('estilo_marca_personal')[0]);\nconst tono = (em && em.valores && em.valores.tono) || 'Profesional, claro y cercano.';\nconst temas = (em && em.valores && em.valores.temas) || [];\n\nconst cats = [...new Set(pick('intereses_rss').flatMap((id) => {\n  const m = find(modules.intereses_rss, id);\n  return (m && m.valores && m.valores.categorias_feed) || [];\n}))];\nconst googleNews = cats.length\n  ? 'https://news.google.com/rss/search?q=' + encodeURIComponent('(' + cats.join(' OR ') + ')')\n      + '&hl=' + loc[0] + '&gl=' + loc[1] + '&ceid=' + encodeURIComponent(loc[2])\n  : null;\n\nconst FEEDS = [\n  googleNews,\n  'https://blogs.nvidia.com/feed/',\n  'https://openai.com/news/rss.xml',\n  'https://blog.google/rss/'\n].filter(Boolean);\n\nconst profile = { idioma, tono, temas: Array.isArray(temas) ? temas.join(', ') : String(temas), categorias: cats };\nreturn FEEDS.map((feed_url) => ({ json: { profile, feed_url } }));\n"
+      },
+      "id": "cargar-perfil",
+      "name": "Cargar perfil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-920, 220]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.feed_url }}",
+        "options": {}
+      },
+      "id": "rss-fuente",
+      "name": "RSS - Fuente",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [-700, 220],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const title = ($json.title || '').trim();\nconst link = $json.link || $json.guid || '';\nconst norm = title.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').trim();\nreturn { json: {\n  title,\n  link,\n  item_key: 'brand:' + norm,\n  text: (title + ' ' + ($json.contentSnippet || $json.content || '')).slice(0, 1800),\n} };\n"
+      },
+      "id": "normalizar",
+      "name": "Normalizar fuente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-480, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nconst seen = store.brandSeen || {};\nconst now = Date.now();\nconst TTL = 45 * 24 * 60 * 60 * 1000;\nfor (const k of Object.keys(seen)) { if (now - seen[k] > TTL) delete seen[k]; }\nconst out = [];\nfor (const item of $input.all()) {\n  const key = item.json.item_key;\n  if (!key || key === 'brand:' || seen[key]) continue;\n  seen[key] = now;\n  out.push({ json: item.json, pairedItem: item.pairedItem });\n}\nstore.brandSeen = seen;\nreturn out;\n"
+      },
+      "id": "deduplicar",
+      "name": "Deduplicar fuentes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-260, 220]
+    },
+    {
+      "parameters": { "maxItems": 3 },
+      "id": "limitar",
+      "name": "Máx. 3 por ejecución",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [-40, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.GEMINI_MODEL }}:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  contents: [{ parts: [{ text:\n    \"Redacta un borrador de post de LinkedIn en el idioma de código '\" + $('Cargar perfil').first().json.profile.idioma + \"'. \" +\n    \"Máximo 1000 caracteres. Tono: \" + $('Cargar perfil').first().json.profile.tono + \". \" +\n    \"Temas de referencia: \" + $('Cargar perfil').first().json.profile.temas + \". \" +\n    \"No inventes cifras ni hechos; es un borrador para revisar. \" +\n    \"Noticia: \" + $json.title + \". Enlace: \" + $json.link + \". Contexto: \" + $json.text\n  }] }],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"OBJECT\",\n      properties: {\n        titulo: { type: \"STRING\" },\n        borrador_linkedin: { type: \"STRING\" },\n        hashtags: { type: \"ARRAY\", items: { type: \"STRING\" } }\n      },\n      required: [\"titulo\", \"borrador_linkedin\", \"hashtags\"]\n    },\n    temperature: 0.7\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "gemini",
+      "name": "Gemini - Borrador LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, 220],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const fs = require('fs');\nconst DIR = '/files/output/marca-personal';\ntry { fs.mkdirSync(DIR, { recursive: true }); } catch (e) {}\n\nlet data;\ntry {\n  const raw = ($json.candidates && $json.candidates[0] && $json.candidates[0].content\n    && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0]\n    && $json.candidates[0].content.parts[0].text) || '{}';\n  data = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Respuesta de Gemini no es JSON válido: ' + e.message);\n}\nif (!data.titulo || !data.borrador_linkedin) {\n  throw new Error('Borrador incompleto de Gemini');\n}\n\nlet fuente = '';\ntry { fuente = $('Normalizar fuente').item.json.link || ''; } catch (e) {}\n\nconst tags = Array.isArray(data.hashtags) ? data.hashtags.join(' ') : String(data.hashtags || '');\nconst fecha = new Date().toISOString().slice(0, 10);\nconst slug = String(data.titulo).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'borrador';\nconst ruta = DIR + '/' + fecha + '_' + slug + '.md';\n\nconst md = '# ' + data.titulo + '\\n\\n'\n  + '> Borrador generado el ' + fecha + '. Revísalo antes de publicar.\\n\\n'\n  + data.borrador_linkedin + '\\n\\n'\n  + (tags ? tags + '\\n\\n' : '')\n  + (fuente ? 'Fuente: ' + fuente + '\\n' : '');\n\ntry { fs.writeFileSync(ruta, md, 'utf8'); } catch (e) { throw new Error('No se pudo escribir ' + ruta + ': ' + e.message); }\n\nreturn { json: {\n  titulo: data.titulo,\n  ruta,\n  preview: data.borrador_linkedin.slice(0, 280),\n  fuente,\n} };\n"
+      },
+      "id": "guardar",
+      "name": "Validar y guardar borrador",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Content-Type", "value": "application/json" } ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"✍️ <b>Borrador LinkedIn listo</b>\\n\\n\" + $json.titulo + \"\\n\\n\" +\n    $json.preview + \"…\\n\\n📄 \" + $json.ruta,\n  parse_mode: \"HTML\",\n  disable_web_page_preview: true\n}) }}",
+        "options": {}
+      },
+      "id": "telegram",
+      "name": "Telegram - Aviso borrador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 220],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Ejecutar ahora": { "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]] },
+    "Cada mañana 08:15": { "main": [[{ "node": "Cargar perfil", "type": "main", "index": 0 }]] },
+    "Cargar perfil": { "main": [[{ "node": "RSS - Fuente", "type": "main", "index": 0 }]] },
+    "RSS - Fuente": { "main": [[{ "node": "Normalizar fuente", "type": "main", "index": 0 }]] },
+    "Normalizar fuente": { "main": [[{ "node": "Deduplicar fuentes", "type": "main", "index": 0 }]] },
+    "Deduplicar fuentes": { "main": [[{ "node": "Máx. 3 por ejecución", "type": "main", "index": 0 }]] },
+    "Máx. 3 por ejecución": { "main": [[{ "node": "Gemini - Borrador LinkedIn", "type": "main", "index": 0 }]] },
+    "Gemini - Borrador LinkedIn": { "main": [[{ "node": "Validar y guardar borrador", "type": "main", "index": 0 }]] },
+    "Validar y guardar borrador": { "main": [[{ "node": "Telegram - Aviso borrador", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "active": false,
+  "versionId": "a1b2c3d4-0004-4000-8000-000000000004",
+  "meta": {}
+}

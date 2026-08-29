@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "updated_at": "2026-08-28T16:32:14+00:00",
+  "selections": {
+    "formacion": [
+      "ingenieria_informatica"
+    ],
+    "sector_interes": [
+      "inteligencia_artificial"
+    ],
+    "objetivo_profesional": [
+      "primer_empleo"
+    ],
+    "intereses_rss": [
+      "ia_machine_learning",
+      "tecnologia_startups"
+    ],
+    "estilo_marca_personal": [
+      "tecnico_experto"
+    ],
+    "frecuencia_automatizacion": [
+      "dias_laborables"
+    ],
+    "idioma": [
+      "espanol"
+    ]
+  },
+  "ubicacion_laboral": "Barcelona"
+}

@@ -1,0 +1,161 @@
+{
+  "id": "pa01email000001",
+  "name": "Asistente - Email (requiere OAuth Google)",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [ { "mode": "everyMinute" } ] },
+        "simple": true,
+        "filters": { "readStatus": "unread", "labelIds": ["INBOX"] },
+        "options": {}
+      },
+      "id": "gmail-trigger",
+      "name": "Gmail - Correo nuevo",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [-1200, 240]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Descarta promociones, redes sociales y spam.\nconst labels = $json.labelIds || [];\nconst ruido = ['CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS', 'SPAM', 'TRASH'];\nif (labels.some((l) => ruido.includes(l))) {\n  return null; // el item se descarta\n}\nreturn { json: {\n  id: $json.id,\n  threadId: $json.threadId,\n  subject: $json.subject || '(sin asunto)',\n  from: $json.from || '',\n  date: $json.date || '',\n  text: ($json.text || $json.snippet || '').slice(0, 3000),\n} };\n"
+      },
+      "id": "filtrar",
+      "name": "Filtrar ruido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-980, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nconst seen = store.emailSeen || {};\nconst now = Date.now();\nconst TTL = 14 * 24 * 60 * 60 * 1000;\nfor (const k of Object.keys(seen)) { if (now - seen[k] > TTL) delete seen[k]; }\nconst out = [];\nfor (const item of $input.all()) {\n  const key = item.json.id;\n  if (!key || seen[key]) continue;\n  seen[key] = now;\n  out.push({ json: item.json, pairedItem: item.pairedItem });\n}\nstore.emailSeen = seen;\nreturn out;\n"
+      },
+      "id": "deduplicar",
+      "name": "Deduplicar correos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-760, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.GEMINI_MODEL }}:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  contents: [{ parts: [{ text:\n    \"Actúa como secretaria personal. Analiza este correo y responde SOLO JSON. \" +\n    \"Fecha de referencia (ahora): \" + $now.toISO() + \". \" +\n    \"Campos: categoria (una de: personal, trabajo, cita, factura, newsletter, otro), \" +\n    \"prioridad (alta|media|baja), requiere_accion (boolean), resumen (1-2 frases), \" +\n    \"evento: objeto { crear (boolean), titulo (string), inicio (ISO 8601 o ''), fin (ISO 8601 o ''), descripcion (string) }. \" +\n    \"Solo pon evento.crear=true si el correo propone o confirma una cita/reunión con fecha y hora concretas. \" +\n    \"Asunto: \" + $json.subject + \". De: \" + $json.from + \". Texto: \" + $json.text\n  }] }],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"OBJECT\",\n      properties: {\n        categoria: { type: \"STRING\" },\n        prioridad: { type: \"STRING\" },\n        requiere_accion: { type: \"BOOLEAN\" },\n        resumen: { type: \"STRING\" },\n        evento: { type: \"OBJECT\", properties: {\n          crear: { type: \"BOOLEAN\" }, titulo: { type: \"STRING\" },\n          inicio: { type: \"STRING\" }, fin: { type: \"STRING\" }, descripcion: { type: \"STRING\" }\n        }, required: [\"crear\", \"titulo\", \"inicio\", \"fin\", \"descripcion\"] }\n      },\n      required: [\"categoria\", \"prioridad\", \"requiere_accion\", \"resumen\", \"evento\"]\n    },\n    temperature: 0.2\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "gemini",
+      "name": "Gemini - Análisis secretaría",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-540, 240],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let a;\ntry {\n  const raw = ($json.candidates && $json.candidates[0] && $json.candidates[0].content\n    && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0]\n    && $json.candidates[0].content.parts[0].text) || '{}';\n  a = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Análisis de Gemini no es JSON válido: ' + e.message);\n}\n\nlet email = {};\ntry { email = $('Deduplicar correos').item.json; } catch (e) {}\nconst ev = a.evento || {};\nconst crearEvento = ev.crear === true && !!ev.inicio;\n\nreturn { json: {\n  subject: email.subject || '',\n  from: email.from || '',\n  categoria: a.categoria || 'otro',\n  prioridad: a.prioridad || 'media',\n  requiere_accion: a.requiere_accion === true,\n  resumen: a.resumen || '',\n  crearEvento,\n  evento_titulo: ev.titulo || email.subject || 'Cita',\n  evento_inicio: ev.inicio || '',\n  evento_fin: ev.fin || ev.inicio || '',\n  evento_descripcion: ev.descripcion || ''\n} };\n"
+      },
+      "id": "parsear",
+      "name": "Parsear análisis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-320, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.crearEvento === true }}",
+              "rightValue": "",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-evento",
+      "name": "¿Crear evento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-100, 240]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendar": { "__rl": true, "mode": "list", "value": "primary" },
+        "start": "={{ $json.evento_inicio }}",
+        "end": "={{ $json.evento_fin }}",
+        "additionalFields": {
+          "summary": "={{ $json.evento_titulo }}",
+          "description": "={{ $json.evento_descripcion }}\n\n(Creado automáticamente desde: {{ $json.subject }})"
+        }
+      },
+      "id": "calendar",
+      "name": "Google Calendar - Crear evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [140, 140],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "Content-Type", "value": "application/json" } ] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"📧 <b>\" + ($json.subject || 'Correo') + \"</b>\\n\" +\n    \"De: \" + ($json.from || '') + \"\\n\" +\n    \"Categoría: \" + $json.categoria + \"  ·  Prioridad: \" + $json.prioridad + \"\\n\\n\" +\n    ($json.resumen || '') +\n    ($json.crearEvento ? \"\\n\\n📅 Evento creado: \" + $json.evento_titulo + \" (\" + $json.evento_inicio + \")\" : \"\") +\n    ($json.requiere_accion ? \"\\n\\n⚠️ Requiere tu acción\" : \"\"),\n  parse_mode: \"HTML\",\n  disable_web_page_preview: true\n}) }}",
+        "options": {}
+      },
+      "id": "telegram",
+      "name": "Telegram - Resumen correo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 240],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Gmail - Correo nuevo": { "main": [[{ "node": "Filtrar ruido", "type": "main", "index": 0 }]] },
+    "Filtrar ruido": { "main": [[{ "node": "Deduplicar correos", "type": "main", "index": 0 }]] },
+    "Deduplicar correos": { "main": [[{ "node": "Gemini - Análisis secretaría", "type": "main", "index": 0 }]] },
+    "Gemini - Análisis secretaría": { "main": [[{ "node": "Parsear análisis", "type": "main", "index": 0 }]] },
+    "Parsear análisis": { "main": [[{ "node": "¿Crear evento?", "type": "main", "index": 0 }]] },
+    "¿Crear evento?": {
+      "main": [
+        [{ "node": "Google Calendar - Crear evento", "type": "main", "index": 0 }],
+        [{ "node": "Telegram - Resumen correo", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Calendar - Crear evento": { "main": [[{ "node": "Telegram - Resumen correo", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "active": false,
+  "versionId": "a1b2c3d4-0101-4000-8000-000000000101",
+  "meta": {}
+}

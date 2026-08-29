@@ -1,0 +1,741 @@
+{
+"formacion": [
+{
+"id": "ingenieria_organizacion_industrial",
+"nombre": "Ingeniería en Organización Industrial",
+"valores": {
+"keywords_linkedin": ["Industrial Engineer", "Operations Engineer", "Supply Chain", "Project Engineer", "Business Analyst"]
+}
+},
+{
+"id": "ingenieria_aeroespacial",
+"nombre": "Ingeniería Aeroespacial",
+"valores": {
+"keywords_linkedin": ["Aerospace Engineer", "Aeronautical Engineer", "Systems Engineer", "Aircraft Engineer", "Space Engineer"]
+}
+},
+{
+"id": "ingenieria_industrial",
+"nombre": "Ingeniería Industrial",
+"valores": {
+"keywords_linkedin": ["Industrial Engineer", "Manufacturing Engineer", "Process Engineer", "Operations Engineer", "Production Engineer"]
+}
+},
+{
+"id": "ingenieria_mecanica",
+"nombre": "Ingeniería Mecánica",
+"valores": {
+"keywords_linkedin": ["Mechanical Engineer", "Design Engineer", "Manufacturing Engineer", "Mechanical Design", "Product Engineer"]
+}
+},
+{
+"id": "ingenieria_electronica",
+"nombre": "Ingeniería Electrónica",
+"valores": {
+"keywords_linkedin": ["Electronics Engineer", "Hardware Engineer", "Embedded Engineer", "Control Engineer", "Electronics Design"]
+}
+},
+{
+"id": "ingenieria_electrica",
+"nombre": "Ingeniería Eléctrica",
+"valores": {
+"keywords_linkedin": ["Electrical Engineer", "Power Systems Engineer", "Energy Engineer", "Electrical Design", "Automation Engineer"]
+}
+},
+{
+"id": "ingenieria_informatica",
+"nombre": "Ingeniería Informática",
+"valores": {
+"keywords_linkedin": ["Software Engineer", "Backend Developer", "Full Stack Developer", "Cloud Engineer", "DevOps Engineer"]
+}
+},
+{
+"id": "ingenieria_telecomunicaciones",
+"nombre": "Ingeniería de Telecomunicaciones",
+"valores": {
+"keywords_linkedin": ["Telecommunications Engineer", "Network Engineer", "5G Engineer", "RF Engineer", "Network Architect"]
+}
+},
+{
+"id": "ingenieria_automatica",
+"nombre": "Ingeniería de Automática y Control",
+"valores": {
+"keywords_linkedin": ["Automation Engineer", "Control Engineer", "PLC Engineer", "Robotics Engineer", "Industrial Automation"]
+}
+},
+{
+"id": "ingenieria_energia",
+"nombre": "Ingeniería Energética",
+"valores": {
+"keywords_linkedin": ["Energy Engineer", "Renewable Energy Engineer", "Energy Analyst", "Power Systems", "Energy Consultant"]
+}
+},
+{
+"id": "ingenieria_civil",
+"nombre": "Ingeniería Civil",
+"valores": {
+"keywords_linkedin": ["Civil Engineer", "Structural Engineer", "Project Engineer", "Construction Engineer", "Infrastructure Engineer"]
+}
+},
+{
+"id": "ingenieria_quimica",
+"nombre": "Ingeniería Química",
+"valores": {
+"keywords_linkedin": ["Chemical Engineer", "Process Engineer", "Process Development", "Production Engineer", "R&D Engineer"]
+}
+},
+{
+"id": "administracion_direccion_empresas",
+"nombre": "Administración y Dirección de Empresas",
+"valores": {
+"keywords_linkedin": ["Business Analyst", "Financial Analyst", "Strategy Analyst", "Management Consultant", "Business Development"]
+}
+},
+{
+"id": "economia",
+"nombre": "Economía",
+"valores": {
+"keywords_linkedin": ["Economist", "Economic Analyst", "Financial Analyst", "Data Analyst", "Strategy Analyst"]
+}
+},
+{
+"id": "marketing",
+"nombre": "Marketing",
+"valores": {
+"keywords_linkedin": ["Marketing Specialist", "Digital Marketing", "Growth Marketing", "Brand Manager", "Marketing Analyst"]
+}
+},
+{
+"id": "comunicacion",
+"nombre": "Comunicación y Periodismo",
+"valores": {
+"keywords_linkedin": ["Communication Specialist", "Content Manager", "Journalist", "PR Specialist", "Corporate Communications"]
+}
+},
+{
+"id": "derecho",
+"nombre": "Derecho",
+"valores": {
+"keywords_linkedin": ["Legal Counsel", "Legal Assistant", "Corporate Lawyer", "Compliance", "Legal Advisor"]
+}
+},
+{
+"id": "psicologia",
+"nombre": "Psicología",
+"valores": {
+"keywords_linkedin": ["Psychologist", "HR Specialist", "Talent Acquisition", "People Analyst", "Organizational Psychology"]
+}
+},
+{
+"id": "relaciones_laborales",
+"nombre": "Relaciones Laborales y Recursos Humanos",
+"valores": {
+"keywords_linkedin": ["HR Specialist", "HR Business Partner", "Talent Acquisition", "People Operations", "HR Analyst"]
+}
+},
+{
+"id": "diseno_grafico",
+"nombre": "Diseño Gráfico",
+"valores": {
+"keywords_linkedin": ["Graphic Designer", "Visual Designer", "Brand Designer", "UI Designer", "Creative Designer"]
+}
+},
+{
+"id": "arquitectura",
+"nombre": "Arquitectura",
+"valores": {
+"keywords_linkedin": ["Architect", "Architectural Designer", "BIM Specialist", "Project Architect", "Urban Designer"]
+}
+},
+{
+"id": "ciencia_datos",
+"nombre": "Ciencia de Datos",
+"valores": {
+"keywords_linkedin": ["Data Scientist", "Data Analyst", "Machine Learning Engineer", "Data Engineer", "AI Specialist"]
+}
+},
+{
+"id": "fisica",
+"nombre": "Física",
+"valores": {
+"keywords_linkedin": ["Physicist", "Research Scientist", "Data Scientist", "R&D Engineer", "Quantitative Analyst"]
+}
+},
+{
+"id": "matematicas",
+"nombre": "Matemáticas",
+"valores": {
+"keywords_linkedin": ["Mathematician", "Data Scientist", "Quantitative Analyst", "Data Analyst", "Actuarial Analyst"]
+}
+},
+{
+"id": "fp_industrial",
+"nombre": "FP Industrial",
+"valores": {
+"keywords_linkedin": ["Maintenance Technician", "Production Technician", "Industrial Technician", "Automation Technician", "Quality Technician"]
+}
+}
+],
+"sector_interes": [
+{
+"id": "aeroespacial",
+"nombre": "Aeroespacial y Defensa",
+"valores": {
+"industrias": ["Aeronáutica", "Espacio", "Defensa", "MRO"]
+}
+},
+{
+"id": "automocion",
+"nombre": "Automoción",
+"valores": {
+"industrias": ["Automoción", "Componentes de automóvil", "Movilidad eléctrica", "Manufactura"]
+}
+},
+{
+"id": "tecnologia",
+"nombre": "Tecnología y Software",
+"valores": {
+"industrias": ["Software", "Cloud Computing", "Tecnología empresarial", "SaaS"]
+}
+},
+{
+"id": "inteligencia_artificial",
+"nombre": "Inteligencia Artificial",
+"valores": {
+"industrias": ["IA", "Machine Learning", "Automatización", "Software"]
+}
+},
+{
+"id": "consultoria",
+"nombre": "Consultoría",
+"valores": {
+"industrias": ["Consultoría estratégica", "Consultoría tecnológica", "Consultoría de operaciones", "Management Consulting"]
+}
+},
+{
+"id": "energia",
+"nombre": "Energía",
+"valores": {
+"industrias": ["Energías renovables", "Electricidad", "Petróleo y gas", "Eficiencia energética"]
+}
+},
+{
+"id": "industria_manufactura",
+"nombre": "Industria y Manufactura",
+"valores": {
+"industrias": ["Manufactura", "Producción industrial", "Ingeniería de procesos", "Industria 4.0"]
+}
+},
+{
+"id": "logistica_supply_chain",
+"nombre": "Logística y Supply Chain",
+"valores": {
+"industrias": ["Logística", "Supply Chain", "Transporte", "Distribución"]
+}
+},
+{
+"id": "finanzas_banca",
+"nombre": "Finanzas y Banca",
+"valores": {
+"industrias": ["Banca", "Fintech", "Gestión de activos", "Servicios financieros"]
+}
+},
+{
+"id": "farmaceutico_salud",
+"nombre": "Farmacéutico y Salud",
+"valores": {
+"industrias": ["Farmacéutica", "Biotecnología", "MedTech", "Healthcare"]
+}
+},
+{
+"id": "retail_consumo",
+"nombre": "Retail y Gran Consumo",
+"valores": {
+"industrias": ["Retail", "E-commerce", "FMCG", "Distribución"]
+}
+},
+{
+"id": "telecomunicaciones",
+"nombre": "Telecomunicaciones",
+"valores": {
+"industrias": ["Telecomunicaciones", "Redes", "5G", "Infraestructura digital"]
+}
+},
+{
+"id": "construccion_infraestructuras",
+"nombre": "Construcción e Infraestructuras",
+"valores": {
+"industrias": ["Construcción", "Infraestructuras", "Ingeniería civil", "Obra pública"]
+}
+},
+{
+"id": "turismo_hospitalidad",
+"nombre": "Turismo y Hospitality",
+"valores": {
+"industrias": ["Turismo", "Hoteles", "Travel Tech", "Hospitality"]
+}
+},
+{
+"id": "biotecnologia",
+"nombre": "Biotecnología y Ciencias de la Vida",
+"valores": {
+"industrias": ["Biotecnología", "Genómica", "Investigación biomédica", "Life Sciences"]
+}
+}
+],
+"objetivo_profesional": [
+{
+"id": "practicas_universitarias",
+"nombre": "Prácticas universitarias",
+"valores": {
+"nivel": "practicas",
+"tipo_contrato": "practicas"
+}
+},
+{
+"id": "graduate_program",
+"nombre": "Graduate Program",
+"valores": {
+"nivel": "graduate",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "trainee",
+"nombre": "Trainee",
+"valores": {
+"nivel": "trainee",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "primer_empleo",
+"nombre": "Primer empleo",
+"valores": {
+"nivel": "junior",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "junior_especialista",
+"nombre": "Junior especialista",
+"valores": {
+"nivel": "junior",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "desarrollo_mando",
+"nombre": "Desarrollo hacia management",
+"valores": {
+"nivel": "junior",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "cambio_sector",
+"nombre": "Cambio de sector",
+"valores": {
+"nivel": "junior",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "senior_especialista",
+"nombre": "Especialista senior",
+"valores": {
+"nivel": "senior",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "manager",
+"nombre": "Manager / Responsable",
+"valores": {
+"nivel": "manager",
+"tipo_contrato": "indefinido"
+}
+},
+{
+"id": "freelance_consultoria",
+"nombre": "Freelance / Consultoría independiente",
+"valores": {
+"nivel": "freelance",
+"tipo_contrato": "autonomo"
+}
+}
+],
+"intereses_rss": [
+{
+"id": "ia_machine_learning",
+"nombre": "IA y Machine Learning",
+"valores": {
+"categorias_feed": ["Inteligencia Artificial", "Machine Learning", "Modelos generativos"]
+}
+},
+{
+"id": "aviacion",
+"nombre": "Aviación",
+"valores": {
+"categorias_feed": ["Aerolíneas", "Aeronáutica", "Seguridad aérea"]
+}
+},
+{
+"id": "espacio",
+"nombre": "Espacio",
+"valores": {
+"categorias_feed": ["Exploración espacial", "Lanzamientos", "Industria espacial"]
+}
+},
+{
+"id": "aeroespacial_defensa",
+"nombre": "Industria aeroespacial y defensa",
+"valores": {
+"categorias_feed": ["Aeroespacial", "Defensa", "Tecnología militar"]
+}
+},
+{
+"id": "industria_40",
+"nombre": "Industria 4.0",
+"valores": {
+"categorias_feed": ["Industria 4.0", "IoT industrial", "Digitalización industrial"]
+}
+},
+{
+"id": "robotica",
+"nombre": "Robótica y automatización",
+"valores": {
+"categorias_feed": ["Robótica", "Automatización", "Control industrial"]
+}
+},
+{
+"id": "supply_chain",
+"nombre": "Supply Chain y logística",
+"valores": {
+"categorias_feed": ["Supply Chain", "Logística", "Transporte"]
+}
+},
+{
+"id": "energia_transicion",
+"nombre": "Energía y transición energética",
+"valores": {
+"categorias_feed": ["Energías renovables", "Transición energética", "Almacenamiento"]
+}
+},
+{
+"id": "tecnologia_startups",
+"nombre": "Tecnología y startups",
+"valores": {
+"categorias_feed": ["Startups", "Tecnología", "Venture Capital"]
+}
+},
+{
+"id": "economia_mercados",
+"nombre": "Economía y mercados",
+"valores": {
+"categorias_feed": ["Economía", "Mercados financieros", "Macroeconomía"]
+}
+},
+{
+"id": "fintech",
+"nombre": "Fintech",
+"valores": {
+"categorias_feed": ["Fintech", "Banca digital", "Pagos"]
+}
+},
+{
+"id": "consultoria_estrategia",
+"nombre": "Consultoría y estrategia",
+"valores": {
+"categorias_feed": ["Consultoría", "Estrategia empresarial", "Management"]
+}
+},
+{
+"id": "liderazgo_management",
+"nombre": "Liderazgo y management",
+"valores": {
+"categorias_feed": ["Liderazgo", "Management", "Productividad"]
+}
+},
+{
+"id": "empleo_carrera",
+"nombre": "Empleo y desarrollo profesional",
+"valores": {
+"categorias_feed": ["Mercado laboral", "Carrera profesional", "Empleo"]
+}
+},
+{
+"id": "barcelona_cataluna",
+"nombre": "Economía empresarial de Cataluña",
+"valores": {
+"categorias_feed": ["Economía catalana", "Empresas de Cataluña", "Barcelona"]
+}
+},
+{
+"id": "innovacion_tecnologica",
+"nombre": "Innovación tecnológica",
+"valores": {
+"categorias_feed": ["Innovación", "Tecnología emergente", "I+D"]
+}
+},
+{
+"id": "ciberseguridad",
+"nombre": "Ciberseguridad",
+"valores": {
+"categorias_feed": ["Ciberseguridad", "Threat Intelligence", "Seguridad informática"]
+}
+},
+{
+"id": "datos_analytics",
+"nombre": "Datos y Analytics",
+"valores": {
+"categorias_feed": ["Data Analytics", "Big Data", "Business Intelligence"]
+}
+},
+{
+"id": "sostenibilidad_esg",
+"nombre": "Sostenibilidad y ESG",
+"valores": {
+"categorias_feed": ["Sostenibilidad", "ESG", "Economía circular"]
+}
+},
+{
+"id": "productividad_herramientas",
+"nombre": "Productividad y herramientas digitales",
+"valores": {
+"categorias_feed": ["Productividad", "Automatización personal", "Herramientas digitales"]
+}
+}
+],
+"estilo_marca_personal": [
+{
+"id": "tecnico_experto",
+"nombre": "Técnico y experto",
+"valores": {
+"tono": "Preciso, técnico y basado en conocimiento práctico.",
+"temas": ["Tecnología", "Ingeniería", "Análisis técnico"]
+}
+},
+{
+"id": "divulgador",
+"nombre": "Divulgador",
+"valores": {
+"tono": "Claro, educativo y accesible para públicos no especializados.",
+"temas": ["Divulgación", "Tecnología", "Educación"]
+}
+},
+{
+"id": "liderazgo",
+"nombre": "Liderazgo profesional",
+"valores": {
+"tono": "Profesional, estratégico y orientado a liderazgo.",
+"temas": ["Liderazgo", "Gestión", "Estrategia"]
+}
+},
+{
+"id": "emprendedor",
+"nombre": "Emprendedor",
+"valores": {
+"tono": "Dinámico, ambicioso y orientado a oportunidades.",
+"temas": ["Emprendimiento", "Startups", "Innovación"]
+}
+},
+{
+"id": "analista",
+"nombre": "Analista basado en datos",
+"valores": {
+"tono": "Objetivo, estructurado y respaldado por datos.",
+"temas": ["Datos", "Mercados", "Análisis"]
+}
+},
+{
+"id": "career_builder",
+"nombre": "Desarrollo profesional",
+"valores": {
+"tono": "Práctico, profesional y centrado en crecimiento de carrera.",
+"temas": ["Carrera", "Empleo", "Habilidades profesionales"]
+}
+},
+{
+"id": "innovador",
+"nombre": "Innovador tecnológico",
+"valores": {
+"tono": "Curioso, vanguardista y centrado en nuevas tecnologías.",
+"temas": ["IA", "Innovación", "Tecnologías emergentes"]
+}
+},
+{
+"id": "corporativo",
+"nombre": "Corporativo",
+"valores": {
+"tono": "Formal, ejecutivo y adecuado para entornos empresariales.",
+"temas": ["Negocio", "Industria", "Estrategia corporativa"]
+}
+},
+{
+"id": "casual_profesional",
+"nombre": "Profesional cercano",
+"valores": {
+"tono": "Profesional pero natural, directo y fácil de leer.",
+"temas": ["Experiencias profesionales", "Aprendizaje", "Tecnología"]
+}
+},
+{
+"id": "storytelling",
+"nombre": "Storytelling profesional",
+"valores": {
+"tono": "Narrativo, personal y centrado en experiencias y aprendizajes.",
+"temas": ["Experiencias", "Aprendizajes", "Carrera profesional"]
+}
+},
+{
+"id": "opinion_lider",
+"nombre": "Opinión y análisis sectorial",
+"valores": {
+"tono": "Crítico, argumentado y orientado a generar debate profesional.",
+"temas": ["Opinión sectorial", "Tendencias", "Estrategia"]
+}
+},
+{
+"id": "investigador",
+"nombre": "Investigador",
+"valores": {
+"tono": "Riguroso, académico y centrado en evidencia.",
+"temas": ["Investigación", "Ciencia", "Tecnología"]
+}
+},
+{
+"id": "creator_tecnologia",
+"nombre": "Creator de tecnología",
+"valores": {
+"tono": "Ágil, visual y orientado a explicar novedades tecnológicas.",
+"temas": ["Tecnología", "IA", "Herramientas digitales"]
+}
+},
+{
+"id": "marca_ejecutiva",
+"nombre": "Marca ejecutiva",
+"valores": {
+"tono": "Sobrio, estratégico y orientado a posicionamiento directivo.",
+"temas": ["Management", "Negocio", "Liderazgo"]
+}
+},
+{
+"id": "networking",
+"nombre": "Networking profesional",
+"valores": {
+"tono": "Abierto, constructivo y orientado a conversaciones profesionales.",
+"temas": ["Networking", "Eventos profesionales", "Oportunidades laborales"]
+}
+}
+],
+"frecuencia_automatizacion": [
+{
+"id": "tiempo_real",
+"nombre": "Tiempo real",
+"valores": {
+"frecuencia": "tiempo_real"
+}
+},
+{
+"id": "cada_15_minutos",
+"nombre": "Cada 15 minutos",
+"valores": {
+"frecuencia": "cada_15_minutos"
+}
+},
+{
+"id": "cada_hora",
+"nombre": "Cada hora",
+"valores": {
+"frecuencia": "cada_hora"
+}
+},
+{
+"id": "dos_veces_dia",
+"nombre": "Dos veces al día",
+"valores": {
+"frecuencia": "dos_veces_dia"
+}
+},
+{
+"id": "diario",
+"nombre": "Diario",
+"valores": {
+"frecuencia": "diario"
+}
+},
+{
+"id": "dias_laborables",
+"nombre": "Días laborables",
+"valores": {
+"frecuencia": "dias_laborables"
+}
+},
+{
+"id": "semanal",
+"nombre": "Semanal",
+"valores": {
+"frecuencia": "semanal"
+}
+},
+{
+"id": "quincenal",
+"nombre": "Quincenal",
+"valores": {
+"frecuencia": "quincenal"
+}
+},
+{
+"id": "mensual",
+"nombre": "Mensual",
+"valores": {
+"frecuencia": "mensual"
+}
+},
+{
+"id": "bajo_demanda",
+"nombre": "Bajo demanda",
+"valores": {
+"frecuencia": "bajo_demanda"
+}
+}
+],
+"idioma": [
+{
+"id": "espanol",
+"nombre": "Español",
+"valores": {
+"codigo": "es"
+}
+},
+{
+"id": "catalan",
+"nombre": "Catalán",
+"valores": {
+"codigo": "ca"
+}
+},
+{
+"id": "ingles",
+"nombre": "Inglés",
+"valores": {
+"codigo": "en"
+}
+},
+{
+"id": "frances",
+"nombre": "Francés",
+"valores": {
+"codigo": "fr"
+}
+},
+{
+"id": "aleman",
+"nombre": "Alemán",
+"valores": {
+"codigo": "de"
+}
+}
+]
+}

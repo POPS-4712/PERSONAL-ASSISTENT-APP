@@ -1,0 +1,137 @@
+name: personal-assistant
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - assistant
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  n8n:
+    image: n8nio/n8n:1.121.3
+    container_name: pa-n8n
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+    environment:
+      # --- n8n <-> Postgres (n8n's own data) ---
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      # --- n8n runtime ---
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+      N8N_EDITOR_BASE_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: ${TZ}
+      TZ: ${TZ}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_RUNNERS_ENABLED: "true"
+      # El Code node y las expresiones necesitan leer variables de entorno ($env).
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_LOG_LEVEL: ${N8N_LOG_LEVEL:-info}
+      N8N_LOG_OUTPUT: console
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+      EXECUTIONS_TIMEOUT: "300"
+      # Allow Code nodes to read the mounted profile files (local, single-user).
+      NODE_FUNCTION_ALLOW_BUILTIN: "fs"
+      # --- secrets consumed by workflow HTTP nodes ---
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      PLAYWRIGHT_BASE_URL: http://playwright:3000
+      PROFILE_API_URL: http://profile:7777
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./config:/files/config:ro
+      - ./workflows:/files/workflows:ro
+      - ./output:/files/output
+    depends_on:
+      postgres:
+        condition: service_healthy
+      playwright:
+        condition: service_started
+    networks:
+      - assistant
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5678/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  playwright:
+    build:
+      context: ./playwright
+    image: pa-playwright-scraper:local
+    container_name: pa-playwright
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      TZ: ${TZ}
+    networks:
+      - assistant
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  profile:
+    build:
+      context: ./profile
+    image: pa-profile:local
+    container_name: pa-profile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PROFILE_PORT:-7777}:7777"
+    environment:
+      PORT: 7777
+      CONFIG_DIR: /config
+      TZ: ${TZ}
+    volumes:
+      - ./config:/config
+    networks:
+      - assistant
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:7777/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  n8n_data:
+
+networks:
+  assistant:
+    name: personal_assistant_network
+    driver: bridge

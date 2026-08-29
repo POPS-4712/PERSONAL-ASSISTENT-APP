@@ -1,0 +1,15 @@
+# Secretos y configuración local
+.env
+config/user_profile.json
+
+# Datos de contenedores / runtime
+n8n_data/
+postgres_data/
+
+# Sistema
+*.log
+.DS_Store
+Thumbs.db
+
+# Borradores generados
+output/**/*.md
