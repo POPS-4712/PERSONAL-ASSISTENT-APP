@@ -1,30 +1,90 @@
 {
   "id": "pa01email000001",
-  "name": "Asistente - Email (requiere OAuth Google)",
+  "name": "Asistente - Email",
   "nodes": [
     {
       "parameters": {
-        "pollTimes": { "item": [ { "mode": "everyMinute" } ] },
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
         "simple": true,
-        "filters": { "readStatus": "unread", "labelIds": ["INBOX"] },
+        "filters": {
+          "readStatus": "unread",
+          "labelIds": [
+            "INBOX"
+          ]
+        },
         "options": {}
       },
       "id": "gmail-trigger",
-      "name": "Gmail - Correo nuevo",
+      "name": "Correo nuevo (Gmail)",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.2,
-      "position": [-1200, 240]
+      "position": [
+        -1320,
+        160
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CZLW9RxNDLSl7xpQ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Ejecutar ahora (prueba)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1320,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 5,
+        "simple": true,
+        "filters": {
+          "q": "newer_than:3d"
+        },
+        "options": {}
+      },
+      "id": "gmail-test",
+      "name": "Gmail - Correos recientes (prueba)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -1100,
+        360
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CZLW9RxNDLSl7xpQ",
+          "name": "Gmail account"
+        }
+      }
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Descarta promociones, redes sociales y spam.\nconst labels = $json.labelIds || [];\nconst ruido = ['CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS', 'SPAM', 'TRASH'];\nif (labels.some((l) => ruido.includes(l))) {\n  return null; // el item se descarta\n}\nreturn { json: {\n  id: $json.id,\n  threadId: $json.threadId,\n  subject: $json.subject || '(sin asunto)',\n  from: $json.from || '',\n  date: $json.date || '',\n  text: ($json.text || $json.snippet || '').slice(0, 3000),\n} };\n"
+        "jsCode": "// Descarta promociones, redes sociales y spam por etiqueta de Gmail.\n// Tolera las dos formas de salida: trigger (subject/from/text/labelIds en\n// minúscula) y nodo getAll de prueba (Subject/From/labels en mayúscula).\nconst rawLabels = $json.labelIds || $json.labels || [];\nconst labels = rawLabels.map((l) => (typeof l === 'string' ? l : (l && (l.id || l.name)) || ''));\nconst ruido = ['CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS', 'SPAM', 'TRASH'];\nif (labels.some((l) => ruido.includes(l))) return null;\nreturn { json: {\n  id: $json.id,\n  threadId: $json.threadId,\n  subject: $json.subject || $json.Subject || '(sin asunto)',\n  from: $json.from || $json.From || '',\n  date: $json.date || $json.Date || '',\n  text: ($json.text || $json.textPlain || $json.snippet || '').slice(0, 3000),\n} };\n"
       },
       "id": "filtrar",
       "name": "Filtrar ruido",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-980, 240]
+      "position": [
+        -880,
+        260
+      ]
     },
     {
       "parameters": {
@@ -34,7 +94,23 @@
       "name": "Deduplicar correos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-760, 240]
+      "position": [
+        -660,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Añade a cada correo el idioma resuelto desde config/user_profile.json.\nconst fs = require('fs');\nlet user = { selections: {} };\nlet modules = {};\ntry { user = JSON.parse(fs.readFileSync('/files/config/user_profile.json', 'utf8')); } catch (e) {}\ntry { modules = JSON.parse(fs.readFileSync('/files/config/modules.json', 'utf8')); } catch (e) {}\nconst idId = (user.selections && user.selections.idioma && user.selections.idioma[0]) || 'espanol';\nconst im = (modules.idioma || []).find((o) => o && o.id === idId);\nconst idioma = (im && im.valores && im.valores.codigo) || 'es';\nreturn $input.all().map((it, idx) => ({ json: { ...it.json, idioma }, pairedItem: it.pairedItem || { item: idx } }));\n"
+      },
+      "id": "cargar-perfil",
+      "name": "Cargar perfil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        260
+      ]
     },
     {
       "parameters": {
@@ -43,46 +119,69 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
           ]
         },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  contents: [{ parts: [{ text:\n    \"Actúa como secretaria personal. Analiza este correo y responde SOLO JSON. \" +\n    \"Fecha de referencia (ahora): \" + $now.toISO() + \". \" +\n    \"Campos: categoria (una de: personal, trabajo, cita, factura, newsletter, otro), \" +\n    \"prioridad (alta|media|baja), requiere_accion (boolean), resumen (1-2 frases), \" +\n    \"evento: objeto { crear (boolean), titulo (string), inicio (ISO 8601 o ''), fin (ISO 8601 o ''), descripcion (string) }. \" +\n    \"Solo pon evento.crear=true si el correo propone o confirma una cita/reunión con fecha y hora concretas. \" +\n    \"Asunto: \" + $json.subject + \". De: \" + $json.from + \". Texto: \" + $json.text\n  }] }],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"OBJECT\",\n      properties: {\n        categoria: { type: \"STRING\" },\n        prioridad: { type: \"STRING\" },\n        requiere_accion: { type: \"BOOLEAN\" },\n        resumen: { type: \"STRING\" },\n        evento: { type: \"OBJECT\", properties: {\n          crear: { type: \"BOOLEAN\" }, titulo: { type: \"STRING\" },\n          inicio: { type: \"STRING\" }, fin: { type: \"STRING\" }, descripcion: { type: \"STRING\" }\n        }, required: [\"crear\", \"titulo\", \"inicio\", \"fin\", \"descripcion\"] }\n      },\n      required: [\"categoria\", \"prioridad\", \"requiere_accion\", \"resumen\", \"evento\"]\n    },\n    temperature: 0.2\n  }\n}) }}",
-        "options": {}
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": {{ JSON.stringify(\n            \"Actúa como secretaria personal. Analiza este correo y responde SOLO JSON. \" +\n            \"Ahora es \" + $now.toISO() + \". Escribe 'resumen' y 'evento.descripcion' en el idioma de código '\" + $json.idioma + \"'. \" +\n            \"categoria: una de personal|trabajo|cita|factura|newsletter|otro. prioridad: alta|media|baja. \" +\n            \"requiere_accion: boolean. resumen: 1-2 frases. \" +\n            \"evento.crear = true SOLO si el correo propone o confirma una cita o reunión con fecha y hora concretas; \" +\n            \"en ese caso rellena titulo, e inicio/fin en ISO 8601 con zona horaria. Si no, crear=false y el resto vacío.\\n\\n\" +\n            \"Asunto: \" + $json.subject + \"\\nDe: \" + $json.from + \"\\nTexto: \" + $json.text\n          ) }}\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"responseSchema\": {\n      \"type\": \"OBJECT\",\n      \"properties\": {\n        \"categoria\": { \"type\": \"STRING\" },\n        \"prioridad\": { \"type\": \"STRING\" },\n        \"requiere_accion\": { \"type\": \"BOOLEAN\" },\n        \"resumen\": { \"type\": \"STRING\" },\n        \"evento\": {\n          \"type\": \"OBJECT\",\n          \"properties\": {\n            \"crear\": { \"type\": \"BOOLEAN\" },\n            \"titulo\": { \"type\": \"STRING\" },\n            \"inicio\": { \"type\": \"STRING\" },\n            \"fin\": { \"type\": \"STRING\" },\n            \"descripcion\": { \"type\": \"STRING\" }\n          },\n          \"required\": [\"crear\", \"titulo\", \"inicio\", \"fin\", \"descripcion\"]\n        }\n      },\n      \"required\": [\"categoria\", \"prioridad\", \"requiere_accion\", \"resumen\", \"evento\"]\n    },\n    \"temperature\": 0.2\n  }\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 4000
+            }
+          }
+        }
       },
       "id": "gemini",
       "name": "Gemini - Análisis secretaría",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [-540, 240],
+      "typeVersion": 4.3,
+      "position": [
+        -220,
+        260
+      ],
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "let a;\ntry {\n  const raw = ($json.candidates && $json.candidates[0] && $json.candidates[0].content\n    && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0]\n    && $json.candidates[0].content.parts[0].text) || '{}';\n  a = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Análisis de Gemini no es JSON válido: ' + e.message);\n}\n\nlet email = {};\ntry { email = $('Deduplicar correos').item.json; } catch (e) {}\nconst ev = a.evento || {};\nconst crearEvento = ev.crear === true && !!ev.inicio;\n\nreturn { json: {\n  subject: email.subject || '',\n  from: email.from || '',\n  categoria: a.categoria || 'otro',\n  prioridad: a.prioridad || 'media',\n  requiere_accion: a.requiere_accion === true,\n  resumen: a.resumen || '',\n  crearEvento,\n  evento_titulo: ev.titulo || email.subject || 'Cita',\n  evento_inicio: ev.inicio || '',\n  evento_fin: ev.fin || ev.inicio || '',\n  evento_descripcion: ev.descripcion || ''\n} };\n"
+        "jsCode": "let a = {};\ntry {\n  const r = $json;\n  const raw = r && r.candidates && r.candidates[0] && r.candidates[0].content\n    && r.candidates[0].content.parts && r.candidates[0].content.parts[0]\n    && r.candidates[0].content.parts[0].text;\n  if (raw) a = JSON.parse(raw);\n} catch (e) {}\n\nlet email = {};\ntry { email = $('Cargar perfil').item.json; } catch (e) { email = {}; }\n\nconst ev = a.evento || {};\nconst crearEvento = ev.crear === true && !!ev.inicio;\n\nreturn { json: {\n  subject: email.subject || '(sin asunto)',\n  from: email.from || '',\n  idioma: email.idioma || 'es',\n  categoria: a.categoria || 'otro',\n  prioridad: a.prioridad || 'media',\n  requiere_accion: a.requiere_accion === true,\n  resumen: a.resumen || '(análisis no disponible)',\n  crearEvento,\n  evento_titulo: ev.titulo || email.subject || 'Cita',\n  evento_inicio: ev.inicio || '',\n  evento_fin: ev.fin || ev.inicio || '',\n  evento_descripcion: ev.descripcion || ''\n} };\n"
       },
       "id": "parsear",
       "name": "Parsear análisis",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-320, 240]
+      "position": [
+        0,
+        260
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "typeValidation": "loose", "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
           "conditions": [
             {
               "id": "c1",
               "leftValue": "={{ $json.crearEvento === true }}",
               "rightValue": "",
-              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -93,61 +192,233 @@
       "name": "¿Crear evento?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-100, 240]
+      "position": [
+        220,
+        260
+      ]
     },
     {
       "parameters": {
         "operation": "create",
-        "calendar": { "__rl": true, "mode": "list", "value": "primary" },
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "789b3c533d52f6802febf8151aa9b8a8037b4c9da9b4994ae8c14c4556c3ffad@group.calendar.google.com"
+        },
         "start": "={{ $json.evento_inicio }}",
         "end": "={{ $json.evento_fin }}",
         "additionalFields": {
           "summary": "={{ $json.evento_titulo }}",
-          "description": "={{ $json.evento_descripcion }}\n\n(Creado automáticamente desde: {{ $json.subject }})"
+          "description": "={{ $json.evento_descripcion }}\n\n— Creado automáticamente desde el correo: {{ $json.subject }}"
         }
       },
       "id": "calendar",
-      "name": "Google Calendar - Crear evento",
+      "name": "Google Calendar - Crear evento (PRUEBAS)",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
-      "position": [140, 140],
-      "onError": "continueRegularOutput"
+      "position": [
+        460,
+        140
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "vdrTKBBgCq6cW1Nc",
+          "name": "Google Calendar account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "disabled": true,
+      "notes": "Apunta al calendario secundario 'Asistente IA - PRUEBAS'. Cambiar el id de 'calendar' al calendario real solo cuando se quiera producción."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Recompone los datos del correo tras el nodo de Calendar (que reemplaza el\n// json por el evento creado, o lo deja pasar si está desactivado, o {error}).\nconst cal = $json || {};\nlet email = {};\ntry { email = $('Parsear análisis').item.json; } catch (e) { email = cal; }\nconst creado = !!(cal && cal.id && cal.htmlLink);\nreturn { json: {\n  ...email,\n  evento_creado: creado,\n  evento_link: creado ? cal.htmlLink : ''\n} };\n"
+      },
+      "id": "marcar",
+      "name": "Registrar resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Un único mensaje con todos los correos procesados en esta ejecución.\nconst items = $input.all().map((i) => i.json);\nif (items.length === 0) return [];\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fecha = new Date().toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });\n\nconst bloques = items.map((o, i) => {\n  let b = `<b>${i + 1}. ${esc(o.subject || '(sin asunto)')}</b>\\n`;\n  b += `De: ${esc(o.from || '')}\\n`;\n  b += `${esc(o.categoria || 'otro')} · prioridad ${esc(o.prioridad || 'media')}`;\n  if (o.requiere_accion) b += ' · ⚠️ requiere acción';\n  b += `\\n\\n${esc(o.resumen || '')}`;\n  if (o.evento_creado) b += `\\n\\n📅 Evento creado: ${esc(o.evento_titulo || o.subject)} (${esc(o.evento_inicio || '')})`;\n  else if (o.crearEvento) b += `\\n\\n📅 Cita detectada (evento NO creado): ${esc(o.evento_titulo || '')} (${esc(o.evento_inicio || '')})`;\n  return b;\n}).join('\\n\\n━━━━━━━━━━\\n\\n');\n\nconst texto = `📧 <b>CORREOS</b>\\n<i>${fecha}</i>\\n\\n━━━━━━━━━━\\n\\n${bloques}\\n\\n━━━━━━━━━━\\n<i>${items.length} correo(s)</i>`;\nreturn [{ json: { texto } }];\n"
+      },
+      "id": "digest",
+      "name": "Construir digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        260
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [ { "name": "Content-Type", "value": "application/json" } ] },
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_TOKEN_EMAIL }}/sendMessage",
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: \"📧 <b>\" + ($json.subject || 'Correo') + \"</b>\\n\" +\n    \"De: \" + ($json.from || '') + \"\\n\" +\n    \"Categoría: \" + $json.categoria + \"  ·  Prioridad: \" + $json.prioridad + \"\\n\\n\" +\n    ($json.resumen || '') +\n    ($json.crearEvento ? \"\\n\\n📅 Evento creado: \" + $json.evento_titulo + \" (\" + $json.evento_inicio + \")\" : \"\") +\n    ($json.requiere_accion ? \"\\n\\n⚠️ Requiere tu acción\" : \"\"),\n  parse_mode: \"HTML\",\n  disable_web_page_preview: true\n}) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $env.TELEGRAM_CHAT_ID,\n  text: $json.texto,\n  parse_mode: \"HTML\",\n  disable_web_page_preview: true\n}) }}",
         "options": {}
       },
       "id": "telegram",
-      "name": "Telegram - Resumen correo",
+      "name": "Telegram - Resumen correos",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [400, 240],
+      "typeVersion": 4.3,
+      "position": [
+        1160,
+        260
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
     }
   ],
   "connections": {
-    "Gmail - Correo nuevo": { "main": [[{ "node": "Filtrar ruido", "type": "main", "index": 0 }]] },
-    "Filtrar ruido": { "main": [[{ "node": "Deduplicar correos", "type": "main", "index": 0 }]] },
-    "Deduplicar correos": { "main": [[{ "node": "Gemini - Análisis secretaría", "type": "main", "index": 0 }]] },
-    "Gemini - Análisis secretaría": { "main": [[{ "node": "Parsear análisis", "type": "main", "index": 0 }]] },
-    "Parsear análisis": { "main": [[{ "node": "¿Crear evento?", "type": "main", "index": 0 }]] },
-    "¿Crear evento?": {
+    "Correo nuevo (Gmail)": {
       "main": [
-        [{ "node": "Google Calendar - Crear evento", "type": "main", "index": 0 }],
-        [{ "node": "Telegram - Resumen correo", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Filtrar ruido",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Google Calendar - Crear evento": { "main": [[{ "node": "Telegram - Resumen correo", "type": "main", "index": 0 }]] }
+    "Ejecutar ahora (prueba)": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Correos recientes (prueba)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Correos recientes (prueba)": {
+      "main": [
+        [
+          {
+            "node": "Filtrar ruido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar ruido": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar correos": {
+      "main": [
+        [
+          {
+            "node": "Cargar perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar perfil": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Análisis secretaría",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Análisis secretaría": {
+      "main": [
+        [
+          {
+            "node": "Parsear análisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear análisis": {
+      "main": [
+        [
+          {
+            "node": "¿Crear evento?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Crear evento?": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Crear evento (PRUEBAS)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Construir digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Crear evento (PRUEBAS)": {
+      "main": [
+        [
+          {
+            "node": "Registrar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar resultado": {
+      "main": [
+        [
+          {
+            "node": "Construir digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir digest": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Resumen correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "settings": {
     "executionOrder": "v1",
@@ -156,6 +427,6 @@
     "saveDataSuccessExecution": "all"
   },
   "active": false,
-  "versionId": "a1b2c3d4-0101-4000-8000-000000000101",
+  "versionId": "a1b2c3d4-0101-4000-8000-000000000102",
   "meta": {}
 }
