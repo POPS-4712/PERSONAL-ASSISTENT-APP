@@ -1,4 +1,5 @@
 {
+  "id": "0ikHqQCWMke67aoI",
   "name": "Asistente - Noticias",
   "nodes": [
     {
@@ -146,7 +147,7 @@
           "parameters": [
             {
               "name": "x-goog-api-key",
-              "value": "{{ $env.GEMINI_API_KEY }}"
+              "value": "={{ $env.GEMINI_API_KEY }}"
             }
           ]
         },
@@ -178,7 +179,6 @@
       "name": "Code in JavaScript"
     }
   ],
-  "pinData": {},
   "connections": {
     "Ejecutar ahora": {
       "main": [
@@ -291,18 +291,13 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "saveManualExecutions": true,
     "saveDataErrorExecution": "all",
     "saveDataSuccessExecution": "all"
   },
-  "versionId": "f7c30c2b-0c9c-4699-a7c4-de496b1628f8",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "055f7ba4abc952d024eca101b02c7691b8cced7c815ac2a16117361afe9f5962"
-  },
-  "id": "0ikHqQCWMke67aoI",
-  "tags": []
+  "active": false,
+  "versionId": "a1b2c3d4-0003-4000-8000-000000000003",
+  "meta": {}
 }

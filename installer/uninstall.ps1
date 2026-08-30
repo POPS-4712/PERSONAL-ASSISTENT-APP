@@ -1,0 +1,73 @@
+<#
+.SYNOPSIS
+  Desinstalador de Automation Platform (Windows).
+
+.DESCRIPTION
+  Para y elimina los contenedores, la tarea de arranque automático, el
+  estado del instalador y (opcionalmente) los datos. NO toca recursos
+  externos (tu Docker Desktop, tu cuenta de Google, etc.).
+
+.PARAMETER PurgeData
+  Elimina también los volúmenes de datos (Postgres, n8n) y los borradores
+  generados en output/. IRREVERSIBLE.
+
+.PARAMETER Yes
+  No pide confirmación.
+#>
+[CmdletBinding()]
+param([switch] $PurgeData, [switch] $Yes)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'lib.ps1')
+
+Write-ApLog -Level STEP -Message 'Desinstalando Automation Platform'
+
+if (-not $Yes) {
+  $msg = if ($PurgeData) { 'Esto PARARÁ los servicios y BORRARÁ TODOS LOS DATOS (Postgres, n8n, borradores).' }
+         else            { 'Esto parará y eliminará los contenedores. Los datos en volúmenes se conservan.' }
+  Write-Host $msg -ForegroundColor Yellow
+  if ((Read-Host 'Escribe "si" para continuar') -ne 'si') { Write-ApLog 'Cancelado.'; exit 0 }
+}
+
+$docker = Get-DockerInfo
+if ($docker.found -and $docker.running) {
+  $DockerExe = $docker.path
+  $dq = '"' + $DockerExe + '"'
+  Write-ApStep 'Parando y eliminando contenedores'
+  $down = "$dq compose down --remove-orphans"
+  if ($PurgeData) { $down += ' -v' }
+  Invoke-ApNative $down $RepoRoot | Out-Null
+  foreach ($img in @('pa-playwright-scraper:local','pa-profile:local')) {
+    Invoke-ApNative "$dq image rm $img" | Out-Null
+  }
+  Write-ApOk 'Contenedores eliminados'
+} else {
+  Write-ApWarn 'Docker no está disponible; se omite la limpieza de contenedores.'
+}
+
+Write-ApStep 'Eliminando tarea de arranque automático'
+try {
+  Unregister-ScheduledTask -TaskName 'AutomationPlatform' -Confirm:$false -ErrorAction Stop
+  Write-ApOk 'Tarea programada eliminada'
+} catch { Write-ApWarn 'No había tarea programada que eliminar' }
+
+if ($PurgeData) {
+  Write-ApStep 'Borrando datos locales'
+  $out = Join-Path $RepoRoot 'output\marca-personal'
+  if (Test-Path $out) { Get-ChildItem $out -Filter *.md | Remove-Item -Force -ErrorAction SilentlyContinue }
+  Write-ApOk 'Borradores eliminados'
+}
+
+Write-ApStep 'Eliminando estado del instalador'
+if (Test-Path $script:AP_HOME) {
+  # conserva el log si no es purga total
+  if ($PurgeData) { Remove-Item $script:AP_HOME -Recurse -Force }
+  else { Remove-Item $script:AP_STATE -Force -ErrorAction SilentlyContinue }
+}
+Write-ApOk 'Estado eliminado'
+
+Write-Host ''
+Write-ApLog -Level OK -Message 'Desinstalación completada.'
+Write-ApLog "El repositorio y tu .env NO se han tocado. Bórralos a mano si quieres."

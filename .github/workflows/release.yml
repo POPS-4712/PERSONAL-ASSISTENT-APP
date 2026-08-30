@@ -1,0 +1,146 @@
+name: release
+
+# Matriz de build de todos los artefactos. Se dispara al empujar un tag vX.Y.Z
+# o manualmente. NOTA: requiere runners de GitHub; no puede ejecutarse en local.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Paquetes portables (zip / tar.gz). El payload es independiente de arch.
+  # -------------------------------------------------------------------------
+  portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build portables
+        run: |
+          chmod +x build/build.sh installer/*.sh
+          sudo apt-get update && sudo apt-get install -y zip
+          ./build/build.sh windows-x64 windows-arm64 linux-x64 linux-arm64 raspberrypi-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable
+          path: dist/*
+
+  # -------------------------------------------------------------------------
+  # .deb para Debian / Ubuntu / Raspberry Pi OS. Usa nfpm.
+  # -------------------------------------------------------------------------
+  deb:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nfpm
+        run: |
+          curl -sfL https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_amd64.deb -o /tmp/nfpm.deb
+          sudo dpkg -i /tmp/nfpm.deb
+      - name: Package
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          VERSION=$(tr -d ' \n' < VERSION)
+          mkdir -p dist pkgroot/opt/automation-platform
+          tar -c --exclude='./.git' --exclude='./.env' --exclude='./dist' \
+              --exclude='./pkgroot' --exclude='./node_modules' \
+              --exclude='./output/*/*.md' --exclude='./config/user_profile.json' . \
+            | tar -x -C pkgroot/opt/automation-platform
+          chmod +x build/deb/postinstall.sh installer/*.sh
+          cat > nfpm.yaml <<YAML
+          name: automation-platform
+          arch: ${ARCH}
+          version: ${VERSION}
+          maintainer: "Automation Platform"
+          description: "Asistente personal (n8n + Docker). Instalador y stack local."
+          section: utils
+          priority: optional
+          depends:
+            - "docker.io | docker-ce"
+            - "docker-compose-plugin | docker-compose-v2"
+          contents:
+            - src: ./pkgroot/opt/automation-platform
+              dst: /opt/automation-platform
+            - src: ./installer/install.sh
+              dst: /usr/bin/automation-platform-install
+              file_info:
+                mode: 0755
+          scripts:
+            postinstall: ./build/deb/postinstall.sh
+          YAML
+          nfpm package -p deb -t "dist/automation-platform-${VERSION}-${ARCH}.deb"
+          ( cd dist && sha256sum *.deb > "SHA256SUMS-deb-${ARCH}.txt" )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: dist/*
+
+  # -------------------------------------------------------------------------
+  # Instalador nativo .exe para Windows (x64 y ARM64) con ps2exe.
+  # Firma opcional: si el secret WINDOWS_PFX_BASE64 existe.
+  # -------------------------------------------------------------------------
+  windows-exe:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build .exe
+        shell: pwsh
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Install-Module ps2exe -Force -Scope CurrentUser -AllowClobber
+          $ver = (Get-Content VERSION -Raw).Trim()
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $exe = "dist/AutomationPlatform-Setup-Windows-$env:ARCH.exe"
+          Invoke-PS2EXE -InputFile installer/install.ps1 -OutputFile $exe `
+            -title 'Automation Platform Setup' -version $ver `
+            -company 'Automation Platform' -product 'Automation Platform'
+      - name: Sign (si hay certificado)
+        shell: pwsh
+        continue-on-error: true
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_PFX_BASE64) { Write-Host 'Sin certificado: .exe sin firmar (BLOCKED BY: certificado de firma).'; exit 0 }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\c.pfx", [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+          $st = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+          & $st.FullName sign /f "$env:RUNNER_TEMP\c.pfx" /p $env:WINDOWS_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Get-ChildItem dist\*.exe)
+      - name: Checksums
+        shell: pwsh
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          Get-FileHash dist\*.exe -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } |
+            Set-Content "dist\SHA256SUMS-exe-$env:ARCH.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe-${{ matrix.arch }}
+          path: dist/*
+
+  # -------------------------------------------------------------------------
+  release:
+    needs: [portable, deb, windows-exe]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: all/*
+          generate_release_notes: true

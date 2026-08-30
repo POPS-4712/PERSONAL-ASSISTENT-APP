@@ -27,17 +27,16 @@ El de Email necesita además OAuth de Google. Todo el detalle en
 
 ## Puesta en marcha
 
-```powershell
-copy .env.example .env
-# edita .env: GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-#             POSTGRES_PASSWORD y N8N_ENCRYPTION_KEY (cadenas largas aleatorias)
+**Windows:** doble clic en **`AutomationPlatform-Setup.cmd`**.
+**Linux / Raspberry Pi:** `./installer/install.sh`.
 
-.\scripts\setup.ps1
-```
+El instalador detecta la plataforma y la arquitectura, comprueba Docker, genera
+`.env` (te pregunta las claves, o las deja pendientes), ajusta puertos, construye
+y levanta los 4 servicios, importa los workflows, ejecuta health checks reales y
+registra el arranque automático. Es **idempotente** y **reanudable**.
+Detalle completo en [INSTALL.md](INSTALL.md).
 
-`setup.ps1` es **idempotente**: detecta Docker, construye las imágenes, arranca
-todo (postgres, n8n, playwright, profile), espera a que esté listo e importa los
-4 workflows. Relánzalo cuando quieras.
+(`scripts/setup.ps1` sigue funcionando: ahora es un alias de `installer/install.ps1`.)
 
 Servicios (todos en localhost, solo accesibles desde tu equipo):
 
