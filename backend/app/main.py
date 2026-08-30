@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -10,8 +11,11 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api import api_router
+from app.api.ws import router as ws_router
 from app.config import get_settings
 from app.core.logging import configure_logging
+from app.services.logbus import bus as log_bus
+from app.services.monitor import hub as metrics_hub
 
 log = logging.getLogger("automation_center")
 
@@ -24,8 +28,20 @@ async def lifespan(app: FastAPI):
     if problems:
         for p in problems:
             log.warning("BLOCKED BY: %s", p)
+
+    # wire the live-log stream and start the single metrics loop
+    log_bus.attach_loop(asyncio.get_running_loop())
+    logging.getLogger().addHandler(log_bus)
+    if settings.environment != "testing":
+        # tests start the hub on demand (first WS connect) to avoid a probe
+        # delay on every TestClient spin-up
+        await metrics_hub.start()
+
     log.info("Automation Center backend %s starting (env=%s)", __version__, settings.environment)
     yield
+    await metrics_hub.stop()
+    logging.getLogger().removeHandler(log_bus)
+    log_bus.detach_loop()
     log.info("Automation Center backend stopping")
 
 
@@ -67,6 +83,7 @@ def create_app() -> FastAPI:
         return response
 
     app.include_router(api_router)
+    app.include_router(ws_router)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict:

@@ -1,12 +1,17 @@
 
-from fastapi import APIRouter, Depends
+import logging
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import __version__
+from app.api.deps import get_current_user
 from app.config import get_settings
 from app.db import get_db
+from app.models import User
 from app.schemas.system import HealthOut, HostMetricsOut, SystemStatusOut
+from app.services.logbus import _order, bus
 from app.services.metrics import as_dict, collect_host_metrics
 from app.services.services_probe import system_status
 
@@ -45,3 +50,22 @@ async def status() -> SystemStatusOut:
 def metrics() -> HostMetricsOut:
     """Real host/container resource metrics."""
     return HostMetricsOut.model_validate(as_dict(collect_host_metrics()))
+
+
+@router.get("/logs")
+def logs(
+    level: str = Query(default="INFO"),
+    limit: int = Query(default=100, ge=1, le=500),
+    source: str | None = Query(default=None),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """Recent structured log lines (secrets already scrubbed). The live stream
+    is `WS /ws/logs`; this is the point-in-time backlog.
+    """
+    threshold = _order(level.upper())
+    items = [
+        e
+        for e in list(bus._ring)
+        if _order(e["level"]) >= threshold and (source is None or source in e["source"])
+    ]
+    return {"data": items[-limit:], "count": len(items)}

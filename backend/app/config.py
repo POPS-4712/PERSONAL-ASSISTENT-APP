@@ -9,7 +9,7 @@ from __future__ import annotations
 import functools
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "testing", "staging", "production"]
@@ -54,12 +54,18 @@ class Settings(BaseSettings):
     # --- Credential encryption (phase 6). 32 url-safe base64 bytes = Fernet key. ---
     credential_encryption_key: str = ""
 
-    # --- n8n integration (phase 7) ---
-    n8n_base_url: str = "http://n8n:5678"
-    n8n_api_key: str = ""
+    # --- n8n integration ---
+    # Also honours the plain N8N_API_URL / N8N_API_KEY names already in .env.
+    n8n_base_url: str = Field(
+        default="http://n8n:5678",
+        validation_alias=AliasChoices("AC_N8N_BASE_URL", "N8N_API_URL", "N8N_URL"),
+    )
+    n8n_api_key: str = Field(
+        default="", validation_alias=AliasChoices("AC_N8N_API_KEY", "N8N_API_KEY")
+    )
 
-    # --- Docker socket, for host/service metrics (phase 8) ---
-    docker_host: str = "unix:///var/run/docker.sock"
+    # --- Monitoring ---
+    monitor_interval_seconds: float = 5.0
     compose_project: str = "personal-assistant"
 
     @field_validator("cors_origins")
