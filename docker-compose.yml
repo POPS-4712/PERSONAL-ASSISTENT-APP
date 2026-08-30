@@ -131,6 +131,40 @@ services:
       retries: 5
       start_period: 10s
 
+  # --- Automation Center control plane (FastAPI) ---
+  backend:
+    build:
+      context: ./backend
+    image: pa-automation-center-backend:local
+    container_name: pa-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    environment:
+      AC_ENVIRONMENT: ${AC_ENVIRONMENT:-production}
+      AC_DEBUG: "false"
+      AC_API_PORT: 8080
+      AC_CORS_ORIGINS: ${AC_CORS_ORIGINS:-http://localhost:3000}
+      # Automation Center's own DB, on the same postgres server as n8n's.
+      AC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/automation_center
+      AC_JWT_SECRET: ${AC_JWT_SECRET}
+      AC_CREDENTIAL_ENCRYPTION_KEY: ${AC_CREDENTIAL_ENCRYPTION_KEY}
+      AC_N8N_BASE_URL: http://n8n:5678
+      AC_N8N_API_KEY: ${N8N_API_KEY:-}
+      AC_COMPOSE_PROJECT: personal-assistant
+      TZ: ${TZ}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - assistant
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+
 volumes:
   postgres_data:
   n8n_data:

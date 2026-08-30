@@ -17,3 +17,17 @@ output/**/*.md
 # Artefactos de build
 dist/
 pkgroot/
+
+# Backend (Python)
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend (Node)
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*.local
