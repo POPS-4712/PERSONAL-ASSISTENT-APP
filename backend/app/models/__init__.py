@@ -5,6 +5,7 @@ from app.models.base import Base
 from app.models.credential import Credential, CredentialStatus, CredentialType
 from app.models.execution import Execution, ExecutionStatus
 from app.models.profile import Profile
+from app.models.refresh_token import RefreshToken
 from app.models.system_event import EventSeverity, SystemEvent
 from app.models.user import User, UserRole, UserStatus
 from app.models.workflow import Workflow, WorkflowStatus
@@ -17,6 +18,7 @@ __all__ = [
     "Execution",
     "ExecutionStatus",
     "Profile",
+    "RefreshToken",
     "EventSeverity",
     "SystemEvent",
     "User",

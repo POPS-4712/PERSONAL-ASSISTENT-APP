@@ -36,4 +36,4 @@ USER root
 RUN pip install --no-cache-dir "pytest==8.3.4" "pytest-cov==6.0.0" "anyio==4.7.0"
 COPY tests ./tests
 ENV AC_ENVIRONMENT=testing AC_DATABASE_URL=sqlite+pysqlite:///:memory:
-RUN pytest -q
+RUN pytest -q --tb=short -rf

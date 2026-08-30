@@ -12,8 +12,11 @@ from app.models.base import Base, JsonB, TimestampMixin, uuid_pk
 
 class CredentialType(str, enum.Enum):
     api_key = "api_key"
-    oauth2 = "oauth2"
+    bearer = "bearer"
     basic_auth = "basic_auth"
+    oauth2 = "oauth2"
+    custom = "custom"
+    # kept for the enum value already present in provisioned databases
     service_token = "service_token"
 
 

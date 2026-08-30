@@ -4,6 +4,10 @@ import os
 
 os.environ.setdefault("AC_ENVIRONMENT", "testing")
 os.environ.setdefault("AC_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+# A real Fernet key so the credential-manager tests exercise real encryption.
+os.environ.setdefault(
+    "AC_CREDENTIAL_ENCRYPTION_KEY", "jpVUkdjPW0gHZ-5-bSUieGJIkYo3Mjdn-8rCdSV7Qro="
+)
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,8 +20,11 @@ from app.main import create_app
 from app.models import Base
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def engine():
+    """A fresh in-memory database per test — isolation matters for the auth and
+    multi-user tests (e.g. "first registered user is admin").
+    """
     eng = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -29,9 +36,13 @@ def engine():
 
 
 @pytest.fixture
-def db_session(engine):
-    TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    session = TestingSession()
+def session_factory(engine):
+    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+@pytest.fixture
+def db_session(session_factory):
+    session = session_factory()
     try:
         yield session
     finally:
@@ -40,13 +51,11 @@ def db_session(engine):
 
 
 @pytest.fixture
-def client(engine):
+def client(engine, session_factory):
     app = create_app()
 
-    TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-
     def _get_db():
-        db = TestingSession()
+        db = session_factory()
         try:
             yield db
         finally:

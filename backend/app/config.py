@@ -37,10 +37,19 @@ class Settings(BaseSettings):
     # --- Database (Automation Center's own DB, separate from n8n's) ---
     database_url: str = "postgresql+psycopg://automation:automation@localhost:5432/automation_center"
 
-    # --- Auth (used from phase 4 on) ---
+    # --- Auth ---
     jwt_secret: str = "dev-only-insecure-change-me"
+    jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 30
     refresh_token_ttl_days: int = 14
+    # Open registration: the first account always becomes admin. When locked
+    # (installer does this after creating the admin), only admins create users.
+    allow_open_registration: bool = True
+    # Rate limits (slowapi syntax). Auth endpoints get the stricter one.
+    rate_limit_auth: str = "10/minute"
+    rate_limit_default: str = "120/minute"
+    # Password policy.
+    password_min_length: int = 10
 
     # --- Credential encryption (phase 6). 32 url-safe base64 bytes = Fernet key. ---
     credential_encryption_key: str = ""
