@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir "." && pip uninstall -y automation-center-backend
 
 COPY app ./app
 COPY migrations ./migrations
+COPY scripts ./scripts
 COPY alembic.ini ./
 COPY entrypoint.sh ./
 
