@@ -29,9 +29,12 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Integration tests hit a real n8n and are opt-in: run them with
+#   pytest -m integration
+# (a later -m on the CLI overrides the default below).
+addopts = "-q -m 'not integration'"
 markers = [
-    "integration: needs a real Postgres / n8n (skipped by default)",
+    "integration: needs a real Postgres / n8n (opt-in: pytest -m integration)",
 ]
 
 [tool.setuptools.packages.find]

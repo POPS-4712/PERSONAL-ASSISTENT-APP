@@ -58,12 +58,9 @@ $SecretSpec = @(
   @{ key='TELEGRAM_TOKEN_EMAIL';   internal=$false; hint='Token del bot de Email' }
 )
 
-function New-RandomSecret([int]$Len = 48) {
-  -join ((48..57) + (65..90) + (97..122) | Get-Random -Count $Len | ForEach-Object { [char]$_ })
-}
 function New-InternalSecret([hashtable]$Spec) {
   if ($Spec.ContainsKey('kind') -and $Spec.kind -eq 'fernet') { return New-ApFernetKey }
-  return New-RandomSecret
+  return New-ApRandomSecret   # CSPRNG (installer/lib.ps1); nunca Get-Random
 }
 
 function Read-EnvFile([string]$Path) {

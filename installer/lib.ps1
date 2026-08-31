@@ -293,8 +293,17 @@ function Get-N8nWorkflowCount {
 }
 
 # --- Generación de secretos ------------------------------------------
+# CSPRNG. `Get-Random` (System.Random, time-seeded) NO sirve para secretos.
 function New-ApRandomSecret([int]$Len = 48) {
-  -join ((48..57) + (65..90) + (97..122) | Get-Random -Count $Len | ForEach-Object { [char]$_ })
+  $alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'  # 62
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $out = New-Object char[] $Len
+  $buf = New-Object byte[] 1
+  for ($i = 0; $i -lt $Len; $i++) {
+    do { $rng.GetBytes($buf) } while ($buf[0] -ge 248)  # 248 = 4*62: descarta el sesgo de módulo
+    $out[$i] = $alphabet[$buf[0] % 62]
+  }
+  -join $out
 }
 
 function New-ApFernetKey {
