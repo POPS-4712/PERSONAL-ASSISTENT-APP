@@ -37,9 +37,12 @@ if ($docker.found -and $docker.running) {
   $dq = '"' + $DockerExe + '"'
   Write-ApStep 'Parando y eliminando contenedores'
   $down = "$dq compose down --remove-orphans"
+  # -v elimina los volúmenes con nombre (postgres_data -> BD de n8n Y de
+  # automation_center; n8n_data -> credenciales). SOLO con -PurgeData.
   if ($PurgeData) { $down += ' -v' }
   Invoke-ApNative $down $RepoRoot | Out-Null
-  foreach ($img in @('pa-playwright-scraper:local','pa-profile:local')) {
+  foreach ($img in @('pa-playwright-scraper:local','pa-profile:local',
+                     'pa-automation-center-backend:local','pa-automation-center-frontend:local')) {
     Invoke-ApNative "$dq image rm $img" | Out-Null
   }
   Write-ApOk 'Contenedores eliminados'

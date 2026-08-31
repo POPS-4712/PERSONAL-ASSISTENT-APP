@@ -4,3 +4,8 @@
 Dockerfile text eol=lf
 *.Dockerfile text eol=lf
 entrypoint.sh text eol=lf
+
+# PowerShell / Inno Setup: CRLF so Windows PowerShell 5.1 parses them reliably
+# (the scripts also carry a UTF-8 BOM for the accents).
+*.ps1 text eol=crlf
+*.iss text eol=crlf

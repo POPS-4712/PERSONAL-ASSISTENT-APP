@@ -27,8 +27,13 @@ El de Email necesita además OAuth de Google. Todo el detalle en
 
 ## Puesta en marcha
 
-**Windows:** doble clic en **`AutomationPlatform-Setup.cmd`**.
+**Windows:** doble clic en **`AutomationCenter-Setup.exe`** (instalador nativo:
+detecta y prepara WSL2 + Docker Desktop, despliega el stack, health checks).
+Alternativa sin `.exe`: `AutomationPlatform-Setup.cmd`.
 **Linux / Raspberry Pi:** `./installer/install.sh`.
+
+Detalle: [docs/INSTALLATION.md](docs/INSTALLATION.md) ·
+[installer/windows/README.md](installer/windows/README.md).
 
 El instalador detecta la plataforma y la arquitectura, comprueba Docker, genera
 `.env` (te pregunta las claves, o las deja pendientes), ajusta puertos, construye
@@ -133,7 +138,6 @@ docker compose down -v         # parar y BORRAR datos
 
 ## Qué NO incluye (a propósito)
 
-Instalador `.exe`, panel de control web, registro de máquina, auto-updates,
-matriz de builds multiplataforma. Es un despliegue local reproducible con
-`docker compose`, que es lo que necesita el TDR. Esas piezas serían una fase
-posterior.
+Registro de máquina contra un control plane remoto y auto-updates OTA. El
+resto (instalador `.exe` con WSL2/Docker automáticos, panel de control web,
+backup/restore, actualización con rollback, CI de artefactos) sí está.

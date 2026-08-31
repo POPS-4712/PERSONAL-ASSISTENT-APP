@@ -1,0 +1,72 @@
+﻿<#
+.SYNOPSIS
+  Desinstalación de Automation Center (la invoca el desinstalador del .exe).
+
+.DESCRIPTION
+  Pregunta SIEMPRE qué hacer con los datos (salvo -Mode explícito):
+    KeepData   -> para los contenedores, conserva volúmenes (Postgres, n8n).
+    PurgeData  -> además elimina los volúmenes y los borradores. IRREVERSIBLE.
+  Nunca borra datos en silencio. Quita accesos directos, bandeja, tarea de
+  arranque y estado del instalador.
+
+.PARAMETER Mode   KeepData | PurgeData | Ask   (por defecto Ask)
+.PARAMETER Silent Para uso desde el desinstalador de Inno (no usa Read-Host).
+#>
+[CmdletBinding()]
+param(
+  [ValidateSet('KeepData','PurgeData','Ask')][string]$Mode = 'Ask',
+  [switch]$Silent
+)
+
+. (Join-Path $PSScriptRoot 'common.ps1')
+$RepoRoot = Get-RepoRoot
+
+if ($Mode -eq 'Ask') {
+  if ($Silent) { $Mode = 'KeepData' }
+  else {
+    Add-Type -AssemblyName System.Windows.Forms | Out-Null
+    $r = [System.Windows.Forms.MessageBox]::Show(
+      "¿Conservar tus datos de Automation Center?`n`n" +
+      "SÍ  = conservar (workflows, perfiles, credenciales, usuarios, BD).`n" +
+      "NO  = borrar TODO (irreversible).`n" +
+      "Cancelar = no desinstalar ahora.",
+      'Automation Center - Desinstalar',
+      [System.Windows.Forms.MessageBoxButtons]::YesNoCancel,
+      [System.Windows.Forms.MessageBoxIcon]::Warning)
+    switch ($r) {
+      'Yes'    { $Mode = 'KeepData' }
+      'No'     { $Mode = 'PurgeData' }
+      default  { Write-ApLog 'Desinstalación cancelada.'; exit 0 }
+    }
+  }
+}
+
+Write-ApLog -Level STEP -Message "Desinstalando Automation Center (modo: $Mode)"
+
+# Bandeja
+Get-Process powershell -ErrorAction SilentlyContinue |
+  Where-Object { $_.Path -and (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)").CommandLine -match 'tray\.ps1' } |
+  ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+
+# Arranque automático (tarea programada + RunOnce)
+foreach ($t in @('AutomationPlatform','AutomationCenter')) {
+  schtasks.exe /Delete /TN $t /F 2>$null | Out-Null
+}
+Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'AutomationCenterSetupResume' -ErrorAction SilentlyContinue
+
+# Contenedores / volúmenes (reutiliza el desinstalador base)
+$dArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File', (Join-Path $RepoRoot 'installer\uninstall.ps1'), '-Yes')
+if ($Mode -eq 'PurgeData') { $dArgs += '-PurgeData' }
+$p = Start-Process powershell.exe -ArgumentList $dArgs -Wait -PassThru -NoNewWindow
+
+# Accesos directos del menú Inicio (Inno borra los suyos; esto cubre el resto)
+$sm = Join-Path ([Environment]::GetFolderPath('Programs')) 'Automation Center'
+if (Test-Path $sm) { Remove-Item $sm -Recurse -Force -ErrorAction SilentlyContinue }
+$startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'Automation Center Tray.lnk'
+Remove-Item $startup -Force -ErrorAction SilentlyContinue
+
+Write-ApLog -Level OK -Message "Desinstalación completada (datos: $Mode)."
+if ($Mode -eq 'KeepData') {
+  Write-ApLog 'Tus volúmenes de Docker (personal-assistant_postgres_data, personal-assistant_n8n_data) se han conservado.'
+}
+exit 0

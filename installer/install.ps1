@@ -44,9 +44,12 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Version = (Get-Content (Join-Path $RepoRoot 'VERSION') -Raw).Trim()
 
 # Secretos que consume el stack. internal=lo genera el instalador.
+#   kind='fernet'  -> clave base64 url-safe de 32 bytes (Automation Center credential store)
 $SecretSpec = @(
-  @{ key='POSTGRES_PASSWORD';      internal=$true  }
-  @{ key='N8N_ENCRYPTION_KEY';     internal=$true  }
+  @{ key='POSTGRES_PASSWORD';              internal=$true  }
+  @{ key='N8N_ENCRYPTION_KEY';             internal=$true  }
+  @{ key='AC_JWT_SECRET';                  internal=$true  }
+  @{ key='AC_CREDENTIAL_ENCRYPTION_KEY';   internal=$true; kind='fernet' }
   @{ key='GEMINI_API_KEY';         internal=$false; hint='API key de Google AI Studio (https://aistudio.google.com/app/apikey)' }
   @{ key='TELEGRAM_CHAT_ID';       internal=$false; hint='Tu chat id de Telegram (bot <token>/getUpdates)' }
   @{ key='TELEGRAM_NOTICIAS_TOKEN';internal=$false; hint='Token del bot de Noticias (@BotFather)' }
@@ -57,6 +60,10 @@ $SecretSpec = @(
 
 function New-RandomSecret([int]$Len = 48) {
   -join ((48..57) + (65..90) + (97..122) | Get-Random -Count $Len | ForEach-Object { [char]$_ })
+}
+function New-InternalSecret([hashtable]$Spec) {
+  if ($Spec.ContainsKey('kind') -and $Spec.kind -eq 'fernet') { return New-ApFernetKey }
+  return New-RandomSecret
 }
 
 function Read-EnvFile([string]$Path) {
@@ -74,9 +81,13 @@ function Write-EnvFile([string]$Path, [hashtable]$Values) {
   $order = @(
     'POSTGRES_DB','POSTGRES_USER','POSTGRES_PASSWORD','POSTGRES_PORT','',
     'N8N_PORT','N8N_HOST','WEBHOOK_URL','N8N_LOG_LEVEL','N8N_ENCRYPTION_KEY','',
+    'N8N_API_URL','N8N_API_KEY','',
     'PROFILE_PORT','','TZ','',
     'GEMINI_API_KEY','GEMINI_MODEL','',
-    'TELEGRAM_CHAT_ID','TELEGRAM_NOTICIAS_TOKEN','TELEGRAM_TOKEN_MARCA','TELEGRAM_TOKEN_LABORAL','TELEGRAM_TOKEN_EMAIL'
+    'TELEGRAM_CHAT_ID','TELEGRAM_NOTICIAS_TOKEN','TELEGRAM_TOKEN_MARCA','TELEGRAM_TOKEN_LABORAL','TELEGRAM_TOKEN_EMAIL','',
+    'AC_ENVIRONMENT','BACKEND_PORT','FRONTEND_PORT','AC_CORS_ORIGINS','AC_CORS_ORIGIN_REGEX',
+    'AC_JWT_SECRET','AC_CREDENTIAL_ENCRYPTION_KEY','AC_N8N_BASE_URL','AC_N8N_API_KEY',
+    'AC_MONITOR_INTERVAL_SECONDS','VITE_API_URL','VITE_WS_URL'
   )
   $lines = New-Object System.Collections.Generic.List[string]
   $lines.Add('# Generado por installer/install.ps1 - NO subir a git (.gitignore).')
@@ -163,12 +174,17 @@ if ($needEnv) {
   if (-not $env.ContainsKey('N8N_LOG_LEVEL')) { $env['N8N_LOG_LEVEL'] = 'info' }
   if (-not $env.ContainsKey('GEMINI_MODEL'))  { $env['GEMINI_MODEL'] = 'gemini-3.6-flash' }
   if (-not $env.ContainsKey('TZ'))            { $env['TZ'] = 'Europe/Madrid' }
+  if (-not $env.ContainsKey('N8N_API_URL'))   { $env['N8N_API_URL'] = 'http://localhost:5678' }
+  if (-not $env.ContainsKey('AC_ENVIRONMENT')){ $env['AC_ENVIRONMENT'] = 'production' }
+  if (-not $env.ContainsKey('AC_CORS_ORIGINS')) { $env['AC_CORS_ORIGINS'] = 'http://localhost:3000' }
+  if (-not $env.ContainsKey('AC_N8N_BASE_URL'))  { $env['AC_N8N_BASE_URL'] = 'http://n8n:5678' }
+  if (-not $env.ContainsKey('AC_MONITOR_INTERVAL_SECONDS')) { $env['AC_MONITOR_INTERVAL_SECONDS'] = '5' }
 
   $missing = @()
   foreach ($spec in $SecretSpec) {
     $k = $spec.key
     if ($env.ContainsKey($k) -and $env[$k] -and $env[$k] -notmatch 'CAMBIA|PEGA_AQUI|PLACEHOLDER') { continue }
-    if ($spec.internal) { $env[$k] = New-RandomSecret; continue }
+    if ($spec.internal) { $env[$k] = New-InternalSecret $spec; continue }
     $val = $null
     $fromEnvVar = [Environment]::GetEnvironmentVariable($k)
     if     ($fromConfig.ContainsKey($k)) { $val = $fromConfig[$k] }
@@ -192,20 +208,33 @@ if ($needEnv) {
 Set-ApState 'ports'
 Write-ApStep 'Comprobando puertos'
 $env = Read-EnvFile $envPath
-$n8nWant     = [int]($(if ($env.ContainsKey('N8N_PORT'))     { $env['N8N_PORT'] }     else { 5678 }))
-$profileWant = [int]($(if ($env.ContainsKey('PROFILE_PORT')) { $env['PROFILE_PORT'] } else { 7777 }))
-# ¿ya es nuestra instalación la que ocupa ese puerto?
-$n8nRunningHere = Test-ApContainerRunning $DockerExe 'pa-n8n'
-$n8nPort     = if ($n8nRunningHere) { $n8nWant } else { Get-FreePort $n8nWant }
-$profilePort = if ($n8nRunningHere) { $profileWant } else { Get-FreePort $profileWant }
-if ("$n8nPort" -ne "$($env['N8N_PORT'])" -or "$profilePort" -ne "$($env['PROFILE_PORT'])") {
-  $env['N8N_PORT'] = "$n8nPort"; $env['PROFILE_PORT'] = "$profilePort"
+$portSpec = @(
+  @{ key='N8N_PORT';      def=5678 }
+  @{ key='PROFILE_PORT';  def=7777 }
+  @{ key='BACKEND_PORT';  def=8080 }
+  @{ key='FRONTEND_PORT'; def=3000 }
+)
+# ¿ya es nuestra instalación la que ocupa esos puertos? (no re-mapear si sí).
+$stackRunningHere = Test-ApContainerRunning $DockerExe 'pa-n8n'
+$ports = @{}
+$changed = $false
+foreach ($ps in $portSpec) {
+  $want = [int]($(if ($env.ContainsKey($ps.key) -and $env[$ps.key]) { $env[$ps.key] } else { $ps.def }))
+  $got  = if ($stackRunningHere) { $want } else { Get-FreePort $want }
+  $ports[$ps.key] = $got
+  if ("$got" -ne "$($env[$ps.key])") { $env[$ps.key] = "$got"; $changed = $true }
+  if ($got -ne $want) { Write-ApWarn "Puerto $want ocupado -> $($ps.key) usará $got" }
+}
+$n8nPort = $ports['N8N_PORT']; $profilePort = $ports['PROFILE_PORT']
+$backendPort = $ports['BACKEND_PORT']; $frontendPort = $ports['FRONTEND_PORT']
+if ($changed) {
   $env['WEBHOOK_URL'] = "http://localhost:$n8nPort/"
+  $env['AC_CORS_ORIGINS'] = "http://localhost:$frontendPort"
+  $env['VITE_API_URL'] = "http://localhost:$backendPort"
+  $env['VITE_WS_URL']  = "ws://localhost:$backendPort"
   Write-EnvFile $envPath $env
 }
-if ($n8nPort -ne $n8nWant)         { Write-ApWarn "Puerto $n8nWant ocupado -> n8n usará $n8nPort" }
-if ($profilePort -ne $profileWant) { Write-ApWarn "Puerto $profileWant ocupado -> profile usará $profilePort" }
-Write-ApOk "n8n:$n8nPort  profile:$profilePort"
+Write-ApOk "n8n:$n8nPort  profile:$profilePort  backend:$backendPort  frontend:$frontendPort"
 
 $dq = '"' + $DockerExe + '"'
 
@@ -217,23 +246,42 @@ Write-ApOk 'Imágenes construidas'
 
 # --- 7. STARTING SERVICES ----------------------------------------
 Set-ApState 'starting-services'
-Write-ApStep 'Levantando servicios'
+Write-ApStep 'Levantando Postgres'
+if ((Invoke-ApNative "$dq compose up -d postgres" $RepoRoot) -ne 0) { throw 'docker compose up postgres falló' }
+if (-not (Wait-ContainerHealthy $DockerExe 'pa-postgres' 200)) { throw 'pa-postgres no llegó a healthy.' }
+Write-ApOk 'pa-postgres healthy'
+
+# --- 7b. DATABASE: automation_center (nunca DROP; idempotente) -------
+Set-ApState 'database'
+Write-ApStep 'Base de datos automation_center'
+if (Confirm-AcDatabase -DockerExe $DockerExe -Cwd $RepoRoot) { Write-ApOk 'automation_center creada' }
+else { Write-ApOk 'automation_center ya existía (conservada)' }
+
+Write-ApStep 'Levantando el resto de servicios'
 if ((Invoke-ApNative "$dq compose up -d" $RepoRoot) -ne 0) { throw 'docker compose up falló' }
-foreach ($c in @('pa-postgres','pa-playwright','pa-profile','pa-n8n')) {
-  if (Wait-ContainerHealthy $DockerExe $c 200) { Write-ApOk "$c healthy" }
+foreach ($c in @('pa-playwright','pa-profile','pa-n8n','pa-backend','pa-frontend')) {
+  if (Wait-ContainerHealthy $DockerExe $c 240) { Write-ApOk "$c healthy" }
   else { throw "$c no llegó a healthy. Revisa: docker compose logs $c" }
 }
+# Las migraciones de Alembic las aplica el entrypoint del backend (idempotente:
+# `alembic upgrade head` es no-op si ya está al día). Verificación explícita:
+$rev = (Invoke-ApNative "$dq compose exec -T backend alembic current" $RepoRoot)
+Write-ApOk 'Migraciones aplicadas (alembic upgrade head en el arranque del backend)'
 
-# --- 8. IMPORTING WORKFLOWS -------------------------------------
+# --- 8. IMPORTING WORKFLOWS (upsert por id -> nunca duplica) --------
 Set-ApState 'importing-workflows'
 Write-ApStep 'Importando workflows'
+$before = Get-N8nWorkflowCount -DockerExe $DockerExe -Cwd $RepoRoot
 Invoke-ApNative "$dq compose exec -T n8n n8n import:workflow --separate --input=/files/workflows" $RepoRoot | Out-Null
-Write-ApOk 'Workflows importados'
+$after = Get-N8nWorkflowCount -DockerExe $DockerExe -Cwd $RepoRoot
+Write-ApOk "Workflows importados (workflow_entity: $before -> $after)"
+if ($after -ne 4) { Write-ApLog -Level ERROR -Message "workflow_entity = $after (esperado 4). Revisa la BD de n8n." }
 
 # --- 9. HEALTH CHECK ------------------------------------------------
 Set-ApState 'health-check'
 Write-ApStep 'Health checks'
-$hc = Invoke-ApHealthChecks -DockerExe $DockerExe -N8nPort $n8nPort -ProfilePort $profilePort -Cwd $RepoRoot
+$hc = Invoke-ApHealthChecks -DockerExe $DockerExe -N8nPort $n8nPort -ProfilePort $profilePort `
+  -BackendPort $backendPort -FrontendPort $frontendPort -Cwd $RepoRoot
 $allOk = $true
 foreach ($k in $hc.Keys) {
   $ok = $hc[$k]
@@ -273,13 +321,14 @@ if (-not $allOk) {
 Set-ApState 'ready'
 Write-Host ''
 Write-ApLog -Level OK -Message '================  READY  ================'
-Write-ApLog -Level OK -Message "n8n (workflows):   http://localhost:$n8nPort"
-Write-ApLog -Level OK -Message "Editor de perfil:  http://localhost:$profilePort"
-Write-ApLog -Level OK -Message "Log:               $script:AP_LOG"
+Write-ApLog -Level OK -Message "Automation Center:  http://localhost:$frontendPort"
+Write-ApLog -Level OK -Message "API (backend):      http://localhost:$backendPort/api/health"
+Write-ApLog -Level OK -Message "n8n (workflows):    http://localhost:$n8nPort"
+Write-ApLog -Level OK -Message "Editor de perfil:   http://localhost:$profilePort"
+Write-ApLog -Level OK -Message "Log:                $script:AP_LOG"
 Write-Host ''
-Write-ApLog "Siguiente: abre n8n, crea la cuenta de propietario (local) y prueba cada workflow."
+Write-ApLog "Siguiente: abre Automation Center, crea la cuenta (el primer usuario es admin) y conecta las credenciales."
 if (-not $SkipBrowser) {
-  Start-Process "http://localhost:$n8nPort"
-  Start-Process "http://localhost:$profilePort"
+  Start-Process "http://localhost:$frontendPort"
 }
 exit 0

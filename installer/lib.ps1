@@ -15,9 +15,15 @@ $script:AP_LOG     = Join-Path $script:AP_HOME 'install.log'
 # Pasos de instalación, en orden. El estado guarda el último completado.
 $script:AP_STEPS = @(
   'detecting', 'dependencies', 'directories', 'configuring',
-  'ports', 'building', 'starting-services', 'importing-workflows',
+  'ports', 'database', 'building', 'starting-services', 'importing-workflows',
   'health-check', 'ready'
 )
+
+# Contenedores del stack completo (Fase 1 + Automation Center).
+$script:AP_CONTAINERS = @('pa-postgres','pa-n8n','pa-playwright','pa-profile','pa-backend','pa-frontend')
+
+# IDs de los 4 workflows que deben existir siempre (no se duplican: import upsert por id).
+$script:AP_WORKFLOW_IDS = @('0ikHqQCWMke67aoI','pa01email000001','pa02laboral00001','pa04marcapersonal')
 
 function Initialize-ApHome {
   if (-not (Test-Path $script:AP_HOME)) { New-Item -ItemType Directory -Force -Path $script:AP_HOME | Out-Null }
@@ -213,19 +219,87 @@ function Wait-ContainerHealthy([string]$DockerExe, [string]$Name, [int]$TimeoutS
 }
 
 function Invoke-ApHealthChecks {
-  param([string]$DockerExe, [int]$N8nPort = 5678, [int]$ProfilePort = 7777, [string]$Cwd)
+  param(
+    [string]$DockerExe, [int]$N8nPort = 5678, [int]$ProfilePort = 7777,
+    [int]$BackendPort = 8080, [int]$FrontendPort = 3000, [string]$Cwd
+  )
   $results = [ordered]@{}
-  foreach ($c in @('pa-postgres','pa-n8n','pa-playwright','pa-profile')) {
+  foreach ($c in $script:AP_CONTAINERS) {
     $results["container:$c"] = ((Get-ApContainerState $DockerExe $c) -in @('healthy','running'))
   }
-  $results['http:n8n']     = Test-HttpHealthy "http://localhost:$N8nPort/healthz"
-  $results['http:profile'] = Test-HttpHealthy "http://localhost:$ProfilePort/health"
-  $q = '"' + $DockerExe + '" compose exec -T n8n n8n list:workflow 2>nul'
+  $results['http:n8n']      = Test-HttpHealthy "http://localhost:$N8nPort/healthz"
+  $results['http:profile']  = Test-HttpHealthy "http://localhost:$ProfilePort/health"
+  $results['http:backend']  = Test-HttpHealthy "http://localhost:$BackendPort/api/health"
+  $results['http:frontend'] = Test-HttpHealthy "http://localhost:$FrontendPort/"
+  $n = Get-N8nWorkflowCount -DockerExe $DockerExe -Cwd $Cwd
+  $results['n8n:workflow_entity=4'] = ($n -eq 4)
+  return $results
+}
+
+# --- Postgres: consultas puntuales sin romper por NativeCommandError ------
+function Read-ApEnvMap([string]$Cwd) {
+  $m = @{}
+  $envPath = Join-Path $Cwd '.env'
+  if (-not (Test-Path $envPath)) { $envPath = Join-Path (Split-Path -Parent $Cwd) '.env' }
+  if (Test-Path $envPath) {
+    foreach ($l in Get-Content $envPath) {
+      if ($l -match '^\s*#') { continue }
+      if ($l -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') { $m[$Matches[1]] = $Matches[2] }
+    }
+  }
+  return $m
+}
+
+function Invoke-ApPsql {
+  param([string]$DockerExe, [string]$Cwd, [string]$Database = 'postgres', [Parameter(Mandatory)][string]$Sql)
+  $envMap = Read-ApEnvMap $Cwd
+  $user = if ($envMap.ContainsKey('POSTGRES_USER') -and $envMap['POSTGRES_USER']) { $envMap['POSTGRES_USER'] } else { 'assistant' }
+  $pw   = if ($envMap.ContainsKey('POSTGRES_PASSWORD')) { $envMap['POSTGRES_PASSWORD'] } else { '' }
+  $esc  = $Sql.Replace('"','\"')
+  $q = '"' + $DockerExe + '" compose exec -T -e PGPASSWORD=' + $pw +
+       ' postgres psql -v ON_ERROR_STOP=1 -U ' + $user + ' -d ' + $Database + ' -tAc "' + $esc + '"'
   $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
   try {
     if ($Cwd) { Push-Location $Cwd }
-    $wf = & $env:ComSpec /c $q
+    # stdout y stderr por separado: las advertencias de compose ("variable not
+    # set") van a stderr y no deben contaminar el valor devuelto por psql.
+    $out = & $env:ComSpec /c "$q 2>NUL"
   } finally { if ($Cwd) { Pop-Location }; $ErrorActionPreference = $prev }
-  $results['n8n:workflows'] = (($wf | Select-String -Pattern 'Asistente' | Measure-Object).Count -ge 3)
-  return $results
+  # Nos quedamos con la última línea no vacía (el valor real de psql -tA).
+  $lines = @("$out" -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+  return @{ code = $LASTEXITCODE; out = ($(if ($lines.Count) { $lines[-1] } else { '' })); raw = ("$out".Trim()) }
+}
+
+function Confirm-AcDatabase {
+  # Crea la BD automation_center si no existe. NUNCA hace DROP. Idempotente.
+  param([string]$DockerExe, [string]$Cwd)
+  $chk = Invoke-ApPsql -DockerExe $DockerExe -Cwd $Cwd -Database 'postgres' `
+    -Sql "SELECT 1 FROM pg_database WHERE datname='automation_center'"
+  if ($chk.code -ne 0) { throw "No se pudo consultar Postgres: $($chk.raw)" }
+  if ($chk.out -eq '1') { return $false }  # ya existía
+  $crt = Invoke-ApPsql -DockerExe $DockerExe -Cwd $Cwd -Database 'postgres' `
+    -Sql 'CREATE DATABASE automation_center'
+  if ($crt.code -ne 0) { throw "No se pudo crear automation_center: $($crt.raw)" }
+  return $true
+}
+
+function Get-N8nWorkflowCount {
+  param([string]$DockerExe, [string]$Cwd)
+  $envMap = Read-ApEnvMap $Cwd
+  $db = if ($envMap.ContainsKey('POSTGRES_DB') -and $envMap['POSTGRES_DB']) { $envMap['POSTGRES_DB'] } else { 'assistant' }
+  $r = Invoke-ApPsql -DockerExe $DockerExe -Cwd $Cwd -Database $db -Sql 'SELECT count(*) FROM workflow_entity'
+  if ($r.code -ne 0 -or $r.out -notmatch '^\d+$') { return -1 }
+  [int]$r.out
+}
+
+# --- Generación de secretos ------------------------------------------
+function New-ApRandomSecret([int]$Len = 48) {
+  -join ((48..57) + (65..90) + (97..122) | Get-Random -Count $Len | ForEach-Object { [char]$_ })
+}
+
+function New-ApFernetKey {
+  # 32 bytes aleatorios en base64 url-safe (formato de clave Fernet, 44 chars).
+  $b = New-Object byte[] 32
+  [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+  [Convert]::ToBase64String($b).Replace('+','-').Replace('/','_')
 }

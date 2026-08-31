@@ -25,12 +25,20 @@ instalarlo con el script oficial. En Windows, si no está, te da el enlace y par
 
 ## Windows
 
-1. Descomprime el paquete `automation-platform-<versión>-windows-<arch>.zip`.
+**Recomendado: `AutomationCenter-Setup.exe`** (instalador nativo Inno Setup).
+Doble clic. Detecta y prepara WSL2 y Docker Desktop, despliega el stack,
+ejecuta health checks y crea los accesos del menú Inicio. Detalle completo en
+[docs/INSTALLATION.md](docs/INSTALLATION.md) y
+[installer/windows/README.md](installer/windows/README.md).
+
+Alternativa sin `.exe` (paquete portable):
+
+1. Descomprime `automation-platform-<versión>-windows-<arch>.zip`.
 2. **Doble clic en `AutomationPlatform-Setup.cmd`.**
 3. Responde a las preguntas (claves de Gemini y Telegram — ver
    [CREDENCIALES.md](CREDENCIALES.md); puedes dejarlas en blanco y rellenarlas
    luego en `.env`).
-4. Al terminar se abre el navegador en n8n y en el editor de perfil.
+4. Al terminar se abre el navegador en Automation Center (`localhost:3000`).
 
 Modo desatendido (sin preguntas), tomando los secretos de un JSON:
 
@@ -67,9 +75,11 @@ Desinstalar: `./installer/uninstall.sh [--purge-data]`
 
 ## Qué comprueba el health check
 
-Contenedores (`pa-postgres`, `pa-n8n`, `pa-playwright`, `pa-profile`), HTTP de
-n8n (`/healthz`) y del editor de perfil (`/health`), y que hay ≥ 3 workflows
-importados. Si algo falla, el instalador termina en `BLOCKED` y no dice `READY`.
+Los 6 contenedores (`pa-postgres`, `pa-n8n`, `pa-playwright`, `pa-profile`,
+`pa-backend`, `pa-frontend`), HTTP de n8n (`/healthz`), del editor de perfil
+(`/health`), del backend (`/api/health`) y del frontend, y que
+`workflow_entity = 4`. Si algo falla, el instalador termina en `BLOCKED` y no
+dice `READY`.
 
 ## Estado y logs
 
@@ -93,12 +103,13 @@ Postgres **no se publica** al host.
 
 ```powershell
 powershell -File build\build.ps1                 # Windows: genera todos los zip/tar.gz
+powershell -File build\build-exe.ps1             # Windows: AutomationCenter-Setup.exe (necesita Inno Setup 6)
 ```
 ```sh
 ./build/build.sh                                 # Linux/macOS
 ```
 
-Salida en `dist/`: un archivo por plataforma + `.sha256` + `release-<versión>.json`.
-El `.exe` nativo firmado y el `.deb` se generan en CI
+Salida en `dist/`: un archivo por plataforma + `.sha256` + `release-<versión>.json`,
+y `AutomationCenter-Setup.exe`. El `.exe` firmado y el `.deb` se generan en CI
 ([.github/workflows/release.yml](.github/workflows/release.yml)) al empujar un
 tag `vX.Y.Z`.
