@@ -2,6 +2,10 @@ name: release
 
 # Matriz de build de todos los artefactos. Se dispara al empujar un tag vX.Y.Z
 # o manualmente. NOTA: requiere runners de GitHub; no puede ejecutarse en local.
+#
+# Gate de validacion: el job `test` corre primero; portable / deb / windows-exe
+# dependen de el (`needs: test`) y `release` depende de los cuatro. Si `test`
+# falla no se empaqueta nada y no se publica ninguna Release.
 on:
   push:
     tags:
@@ -13,9 +17,97 @@ permissions:
 
 jobs:
   # -------------------------------------------------------------------------
+  # GATE: validacion obligatoria. Todo lo demas depende de este job.
+  # Usa los comandos reales del proyecto (pyproject `.[dev]`, scripts de
+  # frontend/package.json, Dockerfile `--target test`). No inventa comandos.
+  # -------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Coherencia de version (VERSION == backend == frontend)
+        run: |
+          v=$(tr -d ' \t\r\n' < VERSION)
+          b=$(grep -E '^version *= *"' backend/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          f=$(node -p "require('./frontend/package.json').version")
+          echo "VERSION=$v  backend/pyproject.toml=$b  frontend/package.json=$f"
+          if [ "$v" != "$b" ] || [ "$v" != "$f" ]; then
+            echo "::error::version mismatch (VERSION=$v backend=$b frontend=$f)"
+            exit 1
+          fi
+
+      - name: Sintaxis de los scripts PowerShell (AST parse)
+        shell: pwsh
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse -Include *.ps1 -Path installer,build,scripts | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors -and $errors.Count) {
+              $bad++
+              Write-Host "FAIL  $($_.FullName)"
+              $errors | ForEach-Object { Write-Host "      $($_.Message)" }
+            } else {
+              Write-Host "ok    $($_.Name)"
+            }
+          }
+          if ($bad) { throw "$bad script(s) PowerShell con errores de sintaxis" }
+
+      - name: docker compose config
+        run: docker compose config -q
+
+      # ---- Backend ------------------------------------------------------
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Backend · instalar dependencias
+        working-directory: backend
+        run: pip install ".[dev]"
+
+      - name: Backend · pytest
+        working-directory: backend
+        run: pytest
+
+      - name: Backend · pip check
+        run: pip check
+
+      - name: Backend · docker build --target test
+        run: docker build --target test backend
+
+      # ---- Frontend ---------------------------------------------------
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend · npm ci
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend · lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Frontend · typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Frontend · test
+        working-directory: frontend
+        run: npm run test
+
+      - name: Frontend · build
+        working-directory: frontend
+        run: npm run build
+
+  # -------------------------------------------------------------------------
   # Paquetes portables (zip / tar.gz). El payload es independiente de arch.
   # -------------------------------------------------------------------------
   portable:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +125,7 @@ jobs:
   # .deb para Debian / Ubuntu / Raspberry Pi OS. Usa nfpm.
   # -------------------------------------------------------------------------
   deb:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -89,6 +182,7 @@ jobs:
   # Firma opcional: si el secret WINDOWS_PFX_BASE64 existe.
   # -------------------------------------------------------------------------
   windows-exe:
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,13 +199,29 @@ jobs:
           WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
           WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
         run: |
-          if (-not $env:WINDOWS_PFX_BASE64) { Write-Host 'Sin certificado: .exe SIN FIRMAR (BLOCKED BY: certificado de firma de codigo).'; exit 0 }
+          if (-not $env:WINDOWS_PFX_BASE64) {
+            Write-Warning 'Sin WINDOWS_PFX_BASE64/PASSWORD: AutomationCenter-Setup.exe queda SIN FIRMAR.'
+            Write-Output '::warning title=EXE sin firmar::No hay certificado de firma de codigo (secrets WINDOWS_PFX_BASE64 / WINDOWS_PFX_PASSWORD).'
+            exit 0
+          }
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\c.pfx", [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
           $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
           & $st.FullName sign /f "$env:RUNNER_TEMP\c.pfx" /p $env:WINDOWS_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 dist\AutomationCenter-Setup.exe
+          Remove-Item "$env:RUNNER_TEMP\c.pfx" -Force -ErrorAction SilentlyContinue
           Get-FileHash dist\AutomationCenter-Setup.exe -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLower())  AutomationCenter-Setup.exe" } |
             Set-Content dist\AutomationCenter-Setup.exe.sha256
+      - name: Comprobar EXE + checksum
+        shell: pwsh
+        run: |
+          $exe = 'dist\AutomationCenter-Setup.exe'
+          $sum = "$exe.sha256"
+          if (-not (Test-Path $exe)) { throw "no se genero $exe" }
+          if (-not (Test-Path $sum)) { throw "no se genero $sum" }
+          $expected = ((Get-Content $sum -Raw) -split '\s+')[0].Trim().ToLower()
+          $actual   = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          if ($expected -ne $actual) { throw "checksum no coincide (sha256 fichero=$actual, .sha256=$expected)" }
+          Write-Host ("OK  sha256=$actual  {0:N0} bytes" -f (Get-Item $exe).Length)
       - name: Comprobar que el .exe arranca
         shell: pwsh
         run: |
@@ -130,7 +240,7 @@ jobs:
 
   # -------------------------------------------------------------------------
   release:
-    needs: [portable, deb, windows-exe]
+    needs: [test, portable, deb, windows-exe]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
