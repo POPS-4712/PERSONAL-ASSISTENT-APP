@@ -1,0 +1,54 @@
+# Fly.io deployment manifest for the Automation Center backend (FastAPI).
+#
+# Why Fly.io: deploys the existing backend/Dockerfile unchanged (internal_port
+# 8080 = the image's EXPOSE/CMD, so no $PORT rewrite needed), first-class
+# WebSockets (wss for /ws/monitor and /ws/logs), automatic HTTPS, native health
+# checks against the real /api/health endpoint, managed Postgres (`fly postgres`)
+# on the same private network, and a keep-one-warm option the real-time metrics
+# hub needs. The architecture is unchanged: this runs the same container image
+# that docker-compose builds; Postgres / n8n / Playwright stay as separate
+# services, not on Vercel.
+#
+# Deploy from THIS directory (build context must be backend/):
+#   cd backend && fly launch --no-deploy --copy-config --name <your-app-name>
+#   fly postgres create --name <db-app> ; fly postgres attach <db-app>
+#   fly secrets set AC_JWT_SECRET=... AC_CREDENTIAL_ENCRYPTION_KEY=... \
+#       AC_DATABASE_URL='postgresql+psycopg://...' AC_CORS_ORIGINS='https://<vercel-domain>'
+#   fly deploy
+# See docs/CLOUD-DEPLOYMENT.md for the full runbook. No secrets live in this file.
+
+app = "automation-center-api"          # placeholder: `fly launch --name` sets the real one
+primary_region = "mad"                 # project TZ is Europe/Madrid; change if you prefer
+
+[build]
+  dockerfile = "Dockerfile"            # backend/Dockerfile, context = backend/
+  build-target = "base"                # ship the runtime stage (non-root, no pytest),
+                                       # NOT the final `test` stage
+
+
+[env]
+  AC_ENVIRONMENT = "production"
+  AC_RUN_MIGRATIONS = "1"              # entrypoint runs `alembic upgrade head` on boot
+  # Everything sensitive (AC_JWT_SECRET, AC_CREDENTIAL_ENCRYPTION_KEY,
+  # AC_DATABASE_URL, AC_N8N_API_KEY) is set via `fly secrets set`, never here.
+  # AC_CORS_ORIGINS is also a `fly secrets set` value once the Vercel URL exists.
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1             # keep 1 warm: the metrics hub + n8n polling
+                                       # loop and open WebSockets must not be suspended
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "25s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"                     # argon2id hashing uses ~64 MiB per verify
