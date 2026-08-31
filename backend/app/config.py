@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     # Rate limits (slowapi syntax). Auth endpoints get the stricter one.
     rate_limit_auth: str = "10/minute"
     rate_limit_default: str = "120/minute"
+    # Comma-separated CIDRs of reverse proxies we trust to set X-Forwarded-For.
+    # Empty (default) = the backend is treated as directly exposed and the
+    # X-Forwarded-For header is ignored for rate-limiting (it is client-spoofable).
+    # Desktop install: leave empty. Behind nginx/Traefik on the same host:
+    # "127.0.0.1/32,::1/128". Behind a cloud LB: that LB's egress range.
+    trusted_proxies: str = ""
     # Password policy.
     password_min_length: int = 10
 
@@ -76,6 +82,21 @@ class Settings(BaseSettings):
     @classmethod
     def _strip(cls, v: str) -> str:
         return v.strip()
+
+    @property
+    def trusted_proxy_networks(self) -> list:
+        import ipaddress
+
+        nets = []
+        for token in self.trusted_proxies.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                nets.append(ipaddress.ip_network(token, strict=False))
+            except ValueError:
+                continue
+        return nets
 
     @property
     def cors_origin_list(self) -> list[str]:

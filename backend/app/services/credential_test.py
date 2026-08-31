@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.core.ssrf import BlockedRequestError, guarded_get
 from app.models import CredentialType
 
 
@@ -20,19 +21,22 @@ class TestResult:
     latency_ms: float | None = None
 
 
-_TIMEOUT = httpx.Timeout(8.0)
+_TIMEOUT_SECONDS = 8.0
 
 
 async def _get(url: str, *, headers: dict | None = None, params: dict | None = None) -> TestResult:
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-            r = await c.get(url, headers=headers or {}, params=params or {})
+        r = await guarded_get(
+            url, headers=headers or {}, params=params or {}, timeout=_TIMEOUT_SECONDS
+        )
         ms = round(r.elapsed.total_seconds() * 1000, 1)
         if 200 <= r.status_code < 300:
             return TestResult(True, f"HTTP {r.status_code}", ms)
         if r.status_code in (401, 403):
             return TestResult(False, f"auth rejected (HTTP {r.status_code})", ms)
         return TestResult(False, f"HTTP {r.status_code}", ms)
+    except BlockedRequestError as exc:
+        return TestResult(False, f"blocked: {exc}")
     except httpx.HTTPError as exc:
         return TestResult(False, f"{type(exc).__name__}: {exc}")
 

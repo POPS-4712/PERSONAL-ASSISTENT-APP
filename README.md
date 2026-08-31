@@ -27,10 +27,15 @@ El de Email necesita además OAuth de Google. Todo el detalle en
 
 ## Puesta en marcha
 
-**Windows:** doble clic en **`AutomationCenter-Setup.exe`** (instalador nativo:
-detecta y prepara WSL2 + Docker Desktop, despliega el stack, health checks).
+**Windows (x64/ARM64):** doble clic en **`AutomationCenter-Setup.exe`**
+(instalador nativo: detecta y prepara WSL2 + Docker Desktop, despliega el stack
+completo incluido el panel Automation Center, health checks).
 Alternativa sin `.exe`: `AutomationPlatform-Setup.cmd`.
-**Linux / Raspberry Pi:** `./installer/install.sh`.
+
+**Linux / Raspberry Pi:** `./installer/install.sh` instala **solo** el stack
+Fase 1 (n8n + Postgres + Playwright + editor de perfil). En v0.4.0 el
+Automation Center (backend + panel web) es **solo Windows**. Ver
+[INSTALL.md](INSTALL.md#plataformas-soportadas-v040).
 
 Detalle: [docs/INSTALLATION.md](docs/INSTALLATION.md) ·
 [installer/windows/README.md](installer/windows/README.md).

@@ -14,15 +14,20 @@ Browser → Vercel → Backend remoto    Browser → localhost:3000 → Backend 
 El instalador Windows despliega la parte **LOCAL**. El frontend en Vercel es
 independiente y no se toca aquí.
 
-## Plataformas soportadas
+## Plataformas soportadas (v0.4.0)
 
-|         | x64 | ARM64 |
-|---------|-----|-------|
-| Windows 10 (2004+) / 11 | ✅ | ✅ |
-| Linux (systemd o portable) | ✅ | ✅ |
-| Raspberry Pi OS 64-bit | — | ✅ |
+El **Automation Center** (backend + panel) se instala **solo en Windows
+x64/ARM64** en v0.4.0.
 
-No se soporta x86/32-bit ni ARM32/ARMv7.
+|         | Automation Center | Stack Fase 1 (n8n/Postgres/…) |
+|---------|-------------------|------------------------------|
+| Windows 10 (2004+) / 11 · x64 · ARM64 | ✅ `AutomationCenter-Setup.exe` | ✅ |
+| Linux x64 / ARM64 | ❌ (no portado) | ✅ `installer/install.sh` |
+| Raspberry Pi OS 64-bit | ❌ (no portado) | ✅ `installer/install.sh` |
+
+`installer/install.sh` no crea la BD `automation_center`, no aplica migraciones
+Alembic y no levanta `pa-backend` / `pa-frontend`. No se soporta x86/32-bit ni
+ARM32/ARMv7.
 
 ## Windows — con `AutomationCenter-Setup.exe`
 
@@ -55,14 +60,16 @@ Los secretos externos (Gemini, Telegram) se rellenan luego en `.env` o desde
 el panel. Con `installer\install.ps1 -Unattended -ConfigFile secrets.json`
 se pueden inyectar en la instalación.
 
-## Windows / Linux — paquete portable
+## Paquete portable
 
 ```powershell
-# Windows: doble clic en AutomationPlatform-Setup.cmd  (o)
+# Windows (stack completo, incl. Automation Center): doble clic en
+# AutomationPlatform-Setup.cmd  (o)
 powershell -ExecutionPolicy Bypass -File installer\install.ps1
 ```
 ```sh
-./installer/install.sh                       # Linux / Raspberry Pi
+# Linux / Raspberry Pi: SOLO stack Fase 1 (sin Automation Center)
+./installer/install.sh
 sudo dpkg -i automation-platform-<v>-<arch>.deb && sudo automation-platform-install
 ```
 

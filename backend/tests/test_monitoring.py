@@ -96,6 +96,57 @@ def test_ws_logs_rejects_missing_token(client):
             pass
 
 
+def _mint_token(sub: str, *, exp_in: int) -> str:
+    import datetime as dt
+
+    import jwt
+
+    from app.config import get_settings
+
+    s = get_settings()
+    now = dt.datetime.now(dt.timezone.utc)
+    return jwt.encode(
+        {
+            "sub": sub,
+            "type": "access",
+            "iat": int(now.timestamp()),
+            "exp": int(now.timestamp()) + exp_in,
+        },
+        s.jwt_secret,
+        algorithm=s.jwt_algorithm,
+    )
+
+
+def test_ws_monitor_rejects_expired_token(client, db_session):
+    from app.models import User
+
+    client.post(
+        "/api/auth/register",
+        json={"email": "exp@example.com", "username": "expuser", "password": PW},
+    )
+    uid = str(db_session.query(User).filter(User.username == "expuser").first().id)
+    expired = _mint_token(uid, exp_in=-10)
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(f"/ws/monitor?token={expired}"):
+            pass
+
+
+def test_ws_monitor_closes_when_token_expires_mid_stream(client, db_session):
+    from app.models import User
+
+    client.post(
+        "/api/auth/register",
+        json={"email": "exp2@example.com", "username": "expuser2", "password": PW},
+    )
+    uid = str(db_session.query(User).filter(User.username == "expuser2").first().id)
+    short = _mint_token(uid, exp_in=2)
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(f"/ws/monitor?token={short}") as ws:
+            ws.receive_json()  # hello
+            for _ in range(50):
+                ws.receive_json()
+
+
 def test_rest_logs_endpoint_requires_auth_and_filters(client, token):
     assert client.get("/api/logs").status_code == 401
     t = token()

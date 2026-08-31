@@ -7,13 +7,22 @@ puertos, construye y levanta los servicios, importa los workflows, ejecuta
 health checks reales y registra el arranque automático. Es **idempotente**
 (re-ejecutar no duplica nada) y **reanudable** (guarda el estado).
 
-## Plataformas soportadas
+## Plataformas soportadas (v0.4.0)
 
-| | x64 | ARM64 |
+**El Automation Center (backend + panel web + instalador `.exe`) es Windows
+x64/ARM64 únicamente en v0.4.0.**
+
+| Plataforma | Stack Fase 1 (n8n + Postgres + Playwright + perfil) | Automation Center (backend + panel) |
 |---|---|---|
-| Windows | ✅ | ✅ |
-| Linux (systemd o portable) | ✅ | ✅ |
-| Raspberry Pi OS (64-bit) | — | ✅ |
+| Windows 10 (2004+) / 11 · x64 y ARM64 | ✅ | ✅ (`AutomationCenter-Setup.exe`) |
+| Linux x64 / ARM64 | ✅ (`installer/install.sh`) | ❌ no portado |
+| Raspberry Pi OS 64-bit | ✅ (`installer/install.sh`) | ❌ no portado |
+
+`installer/install.sh` y `installer/lib.sh` **no** despliegan el Automation
+Center (ni la BD `automation_center`, ni migraciones Alembic, ni backend/frontend,
+ni secretos `AC_*`). En Linux/RPi solo se obtiene el stack de la Fase 1.
+El soporte completo de Linux/RPi para el Automation Center queda para una
+versión posterior.
 
 No se soportan x86/32-bit ni ARM32/ARMv7.
 
@@ -55,7 +64,11 @@ powershell -ExecutionPolicy Bypass -File installer\uninstall.ps1            # co
 powershell -ExecutionPolicy Bypass -File installer\uninstall.ps1 -PurgeData # borra todo
 ```
 
-## Linux / Raspberry Pi
+## Linux / Raspberry Pi — solo stack Fase 1 (sin Automation Center)
+
+> En v0.4.0 el instalador de Linux/RPi **no** incluye el Automation Center
+> (panel web + backend). Instala únicamente n8n + Postgres + Playwright + el
+> editor de perfil. Si necesitas el panel, usa Windows.
 
 ```sh
 tar -xzf automation-platform-<versión>-linux-<arch>.tar.gz

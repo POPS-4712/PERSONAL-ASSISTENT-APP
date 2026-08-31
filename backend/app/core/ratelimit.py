@@ -5,6 +5,7 @@ Kept as a dependency (not a decorator) so it never interferes with FastAPI's
 handler-signature introspection.
 """
 
+import ipaddress
 import threading
 import time
 from collections import defaultdict, deque
@@ -25,11 +26,43 @@ def set_enabled(value: bool) -> None:
     _enabled = value
 
 
-def _clientip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
+def _peer_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
+
+
+def _is_trusted_proxy(ip_str: str) -> bool:
+    nets = get_settings().trusted_proxy_networks
+    if not nets:
+        return False
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return any(ip in net for net in nets)
+
+
+def _clientip(request: Request) -> str:
+    """Best-effort real client IP for rate-limiting.
+
+    X-Forwarded-For is trivially spoofable, so it is honoured only when the
+    immediate peer (``request.client.host``) is a configured trusted proxy. In
+    that case we walk the forwarded chain from the right, skipping hops that are
+    themselves trusted proxies, and take the first address we did not put there.
+    With no trusted proxies configured (desktop / directly-exposed backend) the
+    header is ignored entirely and the TCP peer address is used.
+    """
+    peer = _peer_ip(request)
+    if not _is_trusted_proxy(peer):
+        return peer
+
+    fwd = request.headers.get("x-forwarded-for")
+    if not fwd:
+        return peer
+    chain = [p.strip() for p in fwd.split(",") if p.strip()]
+    for candidate in reversed(chain):
+        if not _is_trusted_proxy(candidate):
+            return candidate
+    return chain[0] if chain else peer
 
 
 class RateLimit:
