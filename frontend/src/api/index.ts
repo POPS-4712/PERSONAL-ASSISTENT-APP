@@ -1,0 +1,104 @@
+import { api } from "./client";
+import type {
+  Credential,
+  CredentialTestResult,
+  HealthResponse,
+  HostMetrics,
+  LogEntry,
+  N8nExecution,
+  N8nHealth,
+  N8nWorkflow,
+  Profile,
+  ProfileDimensions,
+  SystemStatus,
+  TokenResponse,
+  User,
+} from "./types";
+
+export const authApi = {
+  login: (identifier: string, password: string) =>
+    api.post<TokenResponse>("/api/auth/login", { identifier, password }),
+  refresh: (refresh_token: string) => api.post<TokenResponse>("/api/auth/refresh", { refresh_token }),
+  logout: (refresh_token: string) => api.post<{ revoked: boolean }>("/api/auth/logout", { refresh_token }),
+  me: () => api.get<User>("/api/auth/me"),
+};
+
+export const systemApi = {
+  health: (signal?: AbortSignal) => api.getPublic<HealthResponse>("/api/health", signal),
+  status: (signal?: AbortSignal) => api.getPublic<SystemStatus>("/api/system/status", signal),
+  metrics: (signal?: AbortSignal) => api.getPublic<HostMetrics>("/api/system/metrics", signal),
+  logs: (params: { level?: string; limit?: number; source?: string } = {}) =>
+    api.get<{ data: LogEntry[]; count: number }>("/api/logs", {
+      level: params.level,
+      limit: params.limit,
+      source: params.source,
+    }),
+};
+
+export interface ProfileInput {
+  name: string;
+  description?: string;
+  configuration?: Record<string, unknown>;
+  make_primary?: boolean;
+}
+
+export const profilesApi = {
+  list: () => api.get<Profile[]>("/api/profiles"),
+  get: (id: string) => api.get<Profile>(`/api/profiles/${id}`),
+  dimensions: () => api.get<ProfileDimensions>("/api/profiles/dimensions"),
+  create: (input: ProfileInput) => api.post<Profile>("/api/profiles", input),
+  update: (
+    id: string,
+    input: Partial<Pick<ProfileInput, "name" | "description" | "configuration">> & { is_active?: boolean },
+  ) => api.patch<Profile>(`/api/profiles/${id}`, input),
+  duplicate: (id: string, name?: string) =>
+    api.post<Profile>(`/api/profiles/${id}/duplicate`, name ? { name } : {}),
+  remove: (id: string) => api.del<{ deleted: boolean }>(`/api/profiles/${id}`),
+  activate: (id: string) => api.post<Profile>(`/api/profiles/${id}/activate`),
+  deactivate: (id: string) => api.post<Profile>(`/api/profiles/${id}/deactivate`),
+  setPrimary: (id: string) => api.post<Profile>(`/api/profiles/${id}/primary`),
+};
+
+export interface CredentialInput {
+  provider: string;
+  name: string;
+  type: string;
+  secret: Record<string, string>;
+  meta?: Record<string, unknown>;
+}
+
+export const credentialsApi = {
+  list: () => api.get<Credential[]>("/api/credentials"),
+  get: (id: string) => api.get<Credential>(`/api/credentials/${id}`),
+  storeStatus: () => api.get<{ configured: boolean }>("/api/credentials/store-status"),
+  create: (input: CredentialInput) => api.post<Credential>("/api/credentials", input),
+  update: (
+    id: string,
+    input: { name?: string; secret?: Record<string, string>; meta?: Record<string, unknown>; is_enabled?: boolean },
+  ) => api.patch<Credential>(`/api/credentials/${id}`, input),
+  remove: (id: string) => api.del<{ deleted: boolean }>(`/api/credentials/${id}`),
+  test: (id: string) => api.post<CredentialTestResult>(`/api/credentials/${id}/test`),
+};
+
+export const n8nApi = {
+  health: () => api.get<N8nHealth>("/api/n8n/health"),
+  workflows: (params: { active?: boolean; limit?: number } = {}) =>
+    api.get<{ data: N8nWorkflow[] }>("/api/n8n/workflows", {
+      active: params.active,
+      limit: params.limit,
+    }),
+  workflow: (id: string) => api.get<N8nWorkflow>(`/api/n8n/workflows/${id}`),
+  activate: (id: string) => api.post<N8nWorkflow>(`/api/n8n/workflows/${id}/activate`),
+  deactivate: (id: string) => api.post<N8nWorkflow>(`/api/n8n/workflows/${id}/deactivate`),
+  run: (id: string) => api.post<unknown>(`/api/n8n/workflows/${id}/run`),
+  executions: (params: { workflow_id?: string; status?: string; limit?: number } = {}) =>
+    api.get<{ data: N8nExecution[] }>("/api/n8n/executions", {
+      workflow_id: params.workflow_id,
+      status: params.status,
+      limit: params.limit,
+    }),
+  execution: (id: string, includeData = false) =>
+    api.get<N8nExecution>(`/api/n8n/executions/${id}`, { include_data: includeData }),
+};
+
+export { api, ApiError, authEvents } from "./client";

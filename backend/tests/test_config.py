@@ -8,6 +8,12 @@ def test_cors_list_parsing():
     assert s.cors_origin_list == ["http://a.com", "http://b.com"]
 
 
+def test_cors_origin_regex_optional():
+    assert Settings().cors_origin_regex_or_none is None
+    s = Settings(cors_origin_regex=r"https://ac-[a-z0-9-]+\.vercel\.app")
+    assert s.cors_origin_regex_or_none == r"https://ac-[a-z0-9-]+\.vercel\.app"
+
+
 def test_runtime_validation_dev_is_lenient():
     s = Settings(environment="development")
     assert s.validate_runtime() == []

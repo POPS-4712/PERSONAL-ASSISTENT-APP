@@ -31,8 +31,12 @@ class Settings(BaseSettings):
     # --- API ---
     api_host: str = "0.0.0.0"
     api_port: int = 8080
-    # Comma-separated list of allowed browser origins (the Next.js frontend).
+    # Comma-separated list of allowed browser origins (the frontend).
     cors_origins: str = "http://localhost:3000"
+    # Optional regex for allowed origins, used for Vercel preview deployments
+    # e.g. r"https://automation-center-[a-z0-9-]+\.vercel\.app". Empty = disabled.
+    # Keep this scoped to your own project; never use ".*".
+    cors_origin_regex: str = ""
 
     # --- Database (Automation Center's own DB, separate from n8n's) ---
     database_url: str = "postgresql+psycopg://automation:automation@localhost:5432/automation_center"
@@ -76,6 +80,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def cors_origin_regex_or_none(self) -> str | None:
+        return self.cors_origin_regex.strip() or None
 
     @property
     def is_production(self) -> bool:
