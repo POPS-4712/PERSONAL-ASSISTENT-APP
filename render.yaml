@@ -1,0 +1,68 @@
+# Render Blueprint for the Automation Center backend (FastAPI).
+#
+# Deploys backend/Dockerfile UNCHANGED except that it now binds $PORT (Render
+# injects it). Long-running web service (not serverless) so the metrics hub loop
+# and the n8n polling keep running; WebSockets (/ws/monitor, /ws/logs) work
+# natively over wss on *.onrender.com; HTTPS is automatic.
+#
+# One-time setup (needs a human — browser login):
+#   1. Push this repo to GitHub (Render deploys from a connected Git repo).
+#   2. Render Dashboard -> New -> Blueprint -> pick the repo -> Apply.
+#   3. Set the two secret env vars flagged `sync: false` below in the Dashboard.
+#   4. After the first deploy, set AC_CORS_ORIGINS to the real Vercel origin.
+# Full runbook: docs/CLOUD-DEPLOYMENT.md
+#
+# No secret values live in this file.
+
+databases:
+  - name: automation-center-db
+    databaseName: automation_center
+    user: automation
+    plan: basic-256mb          # `free` works for a trial (expires after 30 days)
+    region: frankfurt          # closest to the project TZ (Europe/Madrid)
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: automation-center-api
+    runtime: docker
+    region: frankfurt
+    plan: starter              # NOT `free`: free instances sleep after 15 min and
+                               # would kill the metrics hub + n8n polling loop.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: AC_ENVIRONMENT
+        value: production
+      - key: AC_RUN_MIGRATIONS
+        value: "1"             # entrypoint runs `alembic upgrade head` on boot
+      - key: AC_ENSURE_DATABASE
+        value: "0"             # Render pre-creates the DB and forbids CREATE DATABASE
+      - key: AC_DATABASE_URL
+        fromDatabase:
+          name: automation-center-db
+          property: connectionString   # config.py pins the +psycopg dialect
+      - key: AC_JWT_SECRET
+        generateValue: true            # 256-bit random, satisfies the >=32-char rule
+      - key: AC_CREDENTIAL_ENCRYPTION_KEY
+        sync: false                    # MUST be a Fernet key (44-char base64url).
+                                       # Generate + paste in the Dashboard:
+                                       #   python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
+      - key: AC_CORS_ORIGINS
+        sync: false                    # set to https://tdrassistantproject.vercel.app
+                                       # (exact frontend origin; `*` is rejected because
+                                       #  the API sends Allow-Credentials: true)
+      - key: AC_CORS_ORIGIN_REGEX
+        sync: false                    # optional: ^https://<project>-[a-z0-9-]+\.vercel\.app$
+                                       # to also allow your own Vercel preview URLs
+      - key: AC_TRUSTED_PROXIES
+        value: "10.0.0.0/8"            # Render terminates TLS in front of the app;
+                                       # trust its private range so X-Forwarded-For
+                                       # is used for rate-limiting
+      - key: AC_N8N_BASE_URL
+        sync: false                    # public HTTPS URL of a reachable n8n
+                                       # (a local Docker n8n is NOT reachable from Render)
+      - key: AC_N8N_API_KEY
+        sync: false

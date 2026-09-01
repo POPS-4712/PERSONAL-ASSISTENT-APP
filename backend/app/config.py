@@ -83,6 +83,25 @@ class Settings(BaseSettings):
     def _strip(cls, v: str) -> str:
         return v.strip()
 
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_db_url(cls, v: str) -> str:
+        """Pin the psycopg (v3) dialect.
+
+        Managed Postgres providers (Render, Neon, Supabase, RDS) hand out a
+        driver-less ``postgres://`` / ``postgresql://`` URL. SQLAlchemy would
+        then default to psycopg2, which this backend does not ship. Rewrite the
+        scheme so ``fromDatabase`` wiring works with no manual edit.
+        """
+        v = v.strip()
+        if v.startswith("postgresql+") or v.startswith("sqlite"):
+            return v
+        if v.startswith("postgresql://"):
+            return "postgresql+psycopg://" + v[len("postgresql://") :]
+        if v.startswith("postgres://"):
+            return "postgresql+psycopg://" + v[len("postgres://") :]
+        return v
+
     @property
     def trusted_proxy_networks(self) -> list:
         import ipaddress

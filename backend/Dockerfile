@@ -24,12 +24,14 @@ COPY entrypoint.sh ./
 RUN useradd --system --uid 10001 appuser && chown -R appuser /app
 USER appuser
 
+# Listen on $PORT when the platform injects one (Render, Railway), else 8080
+# (docker-compose, local). EXPOSE stays 8080 for the compose default.
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --retries=10 --start-period=20s \
-    CMD curl -fsS http://localhost:8080/api/health || exit 1
+    CMD curl -fsS "http://localhost:${PORT:-8080}/api/health" || exit 1
 
 ENTRYPOINT ["./entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
 
 # --- test stage: `docker build --target test` runs the suite ---
 FROM base AS test

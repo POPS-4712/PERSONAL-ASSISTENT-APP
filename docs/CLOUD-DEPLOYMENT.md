@@ -21,9 +21,9 @@ This is what `installer/windows/*` installs and what v0.4.0 ships.
 Vercel  →  static frontend (this repo's frontend/, Vite build)
              │  VITE_API_URL / VITE_WS_URL point at a PUBLIC backend
              ▼
-Fly.io  →  FastAPI (this repo's backend/Dockerfile, unchanged)
+Render  →  FastAPI web service (this repo's backend/Dockerfile)
              ▼
-Fly Postgres   ·   n8n / Playwright stay wherever they run (NOT on Vercel/Fly serverless)
+Render Postgres   ·   n8n / Playwright stay wherever they run (NOT on Vercel/Render serverless)
 ```
 
 **Vercel cannot reach `localhost` / `127.0.0.1`.** The frontend runs in the
@@ -31,64 +31,66 @@ visitor's browser; `localhost` there is the visitor's own machine, not your
 server. A cloud frontend therefore requires a backend published on a real
 public HTTPS host.
 
-**Status: the backend is prepared for Fly.io deployment but NOT yet deployed**
-— no provider CLI is available in this environment and `fly` needs an
-authenticated human. There is no public backend URL yet, so `VITE_API_URL`
-cannot be set to a real value.
+**Status: the backend is prepared for Render but NOT yet deployed** — Render's
+first deploy needs a human (GitHub connect + browser login), and the two
+secret env vars must be pasted in the Render Dashboard. Once deployed the
+public URL is `https://<service>.onrender.com`.
 
-### Why Fly.io
+### Why Render
 
 | Criterion | Fit |
 |---|---|
-| Docker | Deploys `backend/Dockerfile` as-is. `internal_port = 8080` matches the image's `EXPOSE`/`CMD` — **no `$PORT` rewrite, no code change**. |
-| FastAPI + uvicorn | Long-running process (not serverless) — the metrics hub background loop and n8n polling keep working. |
-| WebSockets | `wss://` for `/ws/monitor` and `/ws/logs` works natively; `min_machines_running = 1` keeps the socket host warm. |
-| HTTPS | Automatic on `*.fly.dev` (and custom domains). |
-| Health checks | Native HTTP check against the real `/api/health`. |
-| PostgreSQL | `fly postgres` — managed, same private network, superuser (so `app/bootstrap.py`'s `ensure_database()` works). |
-| Env vars / secrets | `fly secrets set` — encrypted, never in the repo or logs. |
-| Cost | Small `shared-cpu-1x` / 512 MB machine + a shared-cpu Postgres; fits the free/low tiers. |
+| Docker | Builds `backend/Dockerfile` directly (`runtime: docker`). The image now binds `$PORT` (Render injects it); `${PORT:-8080}` keeps docker-compose unchanged. |
+| FastAPI + uvicorn | Render **web service** = long-running process (not serverless). The metrics hub loop and n8n polling keep working. Use the **Starter** plan, not Free — Free instances sleep after 15 min idle. |
+| WebSockets | `wss://` for `/ws/monitor` and `/ws/logs` works natively, no extra config. |
+| HTTPS | Automatic on `*.onrender.com` (and custom domains). |
+| Health checks | `healthCheckPath: /api/health` in the Blueprint. |
+| PostgreSQL | Render Managed Postgres, wired via `fromDatabase` → `AC_DATABASE_URL`. The role cannot `CREATE DATABASE`, so `AC_ENSURE_DATABASE=0` skips `app/bootstrap.py`; `alembic upgrade head` still runs on every boot (idempotent). |
+| Env vars / secrets | Blueprint `generateValue` / `sync: false` — secret values are set in the Dashboard, never in the repo or logs. |
 
-Render and Railway also fit but both require the container to bind `$PORT`
-(a Dockerfile change); Fly does not. The manifest lives at
-[`backend/fly.toml`](../backend/fly.toml).
+The Blueprint lives at [`render.yaml`](../render.yaml) (repo root). `backend/fly.toml`
+is kept only as a historical alternative and is not used.
 
 ### Backend deployment runbook (human steps — not run here)
 
-```sh
-cd backend
-fly launch --no-deploy --copy-config --name <your-app-name>   # keeps backend/fly.toml
-fly postgres create --name <your-app-name>-db                 # managed Postgres
-fly postgres attach <your-app-name>-db                        # sets DATABASE_URL secret
-```
-
-`fly postgres attach` creates a `DATABASE_URL` in the form
-`postgres://user:pass@host:5432/db`. The backend needs the psycopg dialect, so
-set it explicitly (do **not** rely on the auto-injected one):
+Render deploys from a connected Git repo, and this repo currently has **no
+remote**. Step 1 is therefore mandatory.
 
 ```sh
-fly secrets set \
-  AC_DATABASE_URL='postgresql+psycopg://user:pass@<your-app-name>-db.flycast:5432/<db>' \
-  AC_JWT_SECRET="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')" \
-  AC_CREDENTIAL_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')"
-# AC_CORS_ORIGINS is set AFTER the Vercel domain exists (see below):
-#   fly secrets set AC_CORS_ORIGINS='https://<your-vercel-domain>'
-# n8n integration (optional, only if n8n is also reachable from Fly):
-#   fly secrets set AC_N8N_BASE_URL='https://<n8n-host>' AC_N8N_API_KEY='<key>'
-fly deploy
+# 1. Publish the repo (GitHub example) — from the repo root:
+git remote add origin https://github.com/<you>/<repo>.git
+git push -u origin master
+
+# 2. Generate the credential-encryption key (needed in step 4). Copy the output:
+python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
 ```
 
-Managed Postgres other than Fly's (Neon, Supabase, RDS): you usually cannot
-`CREATE DATABASE`, so also set `AC_RUN_MIGRATIONS=0`, then run
-`alembic upgrade head` once yourself against the provisioned database.
+3. **Render Dashboard → New → Blueprint** → pick the repo → **Apply**. Render
+   reads `render.yaml` and creates `automation-center-db` + `automation-center-api`.
+   `AC_JWT_SECRET` is auto-generated; `AC_DATABASE_URL` is wired automatically.
 
-After `fly deploy`, the public URL is `https://<your-app-name>.fly.dev`.
-Verify before wiring the frontend:
+4. On the `automation-center-api` service → **Environment**, set the values
+   flagged `sync: false` in `render.yaml`:
+
+   | Key | Value |
+   |---|---|
+   | `AC_CREDENTIAL_ENCRYPTION_KEY` | the Fernet key from step 2 |
+   | `AC_CORS_ORIGINS` | `https://tdrassistantproject.vercel.app` |
+   | `AC_N8N_BASE_URL` | public HTTPS URL of a reachable n8n (see **n8n** below) — leave unset if none |
+   | `AC_N8N_API_KEY` | the n8n API key — leave unset if none |
+
+   Save → Render redeploys.
+
+5. Verify (replace `<service>` with the real name Render shows):
 
 ```sh
-curl -s https://<your-app-name>.fly.dev/api/health        # {"status":"ok"|"degraded", ...}
-curl -s https://<your-app-name>.fly.dev/                   # {"service":"automation-center-backend", ...}
+curl -s https://<service>.onrender.com/api/health   # {"status":"ok"|"degraded", ...}
+curl -s https://<service>.onrender.com/             # {"service":"automation-center-backend", ...}
 ```
+
+Other managed Postgres (Neon, Supabase, RDS) instead of Render's: paste its
+connection string as `AC_DATABASE_URL` (`postgres://…` is auto-normalised to the
+`+psycopg` dialect) and keep `AC_ENSURE_DATABASE=0`.
 
 ## Frontend (Vercel) environment variables
 
@@ -97,8 +99,8 @@ values). See `frontend/.env.example`.
 
 | Variable | Value | Notes |
 |---|---|---|
-| `VITE_API_URL` | `https://<your-app-name>.fly.dev` | Public backend origin, **https**, no trailing slash, no path. Required. Set only once the Fly URL exists. |
-| `VITE_WS_URL`  | `wss://<your-app-name>.fly.dev` | WebSocket origin, **wss**. Optional — `src/config.ts` derives it from `VITE_API_URL` (`https→wss`) when unset, so you normally leave it blank. |
+| `VITE_API_URL` | `https://<service>.onrender.com` | Public backend origin, **https**, no trailing slash, no path. Required. Set only once the Render URL exists. |
+| `VITE_WS_URL`  | `wss://<service>.onrender.com` | WebSocket origin, **wss**. Optional — `src/config.ts` derives it from `VITE_API_URL` (`https→wss`) when unset, so you normally leave it blank. |
 | `VITE_APP_ENV` | `production` | Cosmetic label only. |
 
 If `VITE_API_URL` is unset the SPA falls back to `http://localhost:8080`, which
@@ -111,11 +113,12 @@ On top of the normal `AC_*` settings (`.env.example`):
 
 | Variable | Value | Why |
 |---|---|---|
-| `AC_ENVIRONMENT` | `production` | Enforces real `AC_JWT_SECRET` + `AC_CREDENTIAL_ENCRYPTION_KEY` or the backend reports `degraded`. Set in `backend/fly.toml` `[env]`. |
-| `AC_RUN_MIGRATIONS` | `1` (default) / `0` | `1`: entrypoint runs `alembic upgrade head` on boot. Set `0` for managed Postgres where you must migrate manually. |
-| `AC_CORS_ORIGINS` | `https://<your-vercel-domain>` | Exact browser origin(s) of the frontend, comma-separated. The backend sends `Access-Control-Allow-Credentials: true`, so `*` is not allowed. |
-| `AC_CORS_ORIGIN_REGEX` | `https://<project>-[a-z0-9-]+\.vercel\.app` | Optional, **only** to allow your own Vercel preview deployments. Never `.*`. |
-| `AC_TRUSTED_PROXIES` | egress CIDR of the load balancer / reverse proxy in front of the backend | Without it `X-Forwarded-For` is ignored for rate-limiting (it is client-spoofable). With a public backend behind a proxy you must set this or rate-limiting buckets by the proxy IP. |
+| `AC_ENVIRONMENT` | `production` | Enforces real `AC_JWT_SECRET` + `AC_CREDENTIAL_ENCRYPTION_KEY` or the backend reports `degraded`. Set in `render.yaml`. |
+| `AC_RUN_MIGRATIONS` | `1` (default) / `0` | `1`: entrypoint runs `alembic upgrade head` on boot (idempotent). |
+| `AC_ENSURE_DATABASE` | `1` (default) / `0` | `1`: `app/bootstrap.py` `CREATE DATABASE`s the target if missing (needs an admin role). `0` on managed Postgres where the DB already exists and the role cannot create one. `render.yaml` sets `0`. |
+| `AC_CORS_ORIGINS` | `https://tdrassistantproject.vercel.app` | Exact browser origin(s) of the frontend, comma-separated. The backend sends `Access-Control-Allow-Credentials: true`, so `*` is not allowed. |
+| `AC_CORS_ORIGIN_REGEX` | `^https://<project>-[a-z0-9-]+\.vercel\.app$` | Optional, **only** to allow your own Vercel preview deployments. Never `.*`. |
+| `AC_TRUSTED_PROXIES` | `10.0.0.0/8` on Render (its private range) | Without it `X-Forwarded-For` is ignored for rate-limiting (it is client-spoofable), so every request buckets by the proxy IP. |
 | `AC_JWT_SECRET` | 32+ random chars | Session token signature. |
 | `AC_CREDENTIAL_ENCRYPTION_KEY` | Fernet key (44 char base64url) | Credential store encryption at rest. |
 | `AC_DATABASE_URL` | `postgresql+psycopg://…` | Automation Center's own DB. |
@@ -137,34 +140,25 @@ On top of the normal `AC_*` settings (`.env.example`):
   `referrer-policy: no-referrer`) are set by the backend middleware and by
   `frontend/vercel.json` for the static assets.
 
-## Vercel project status (audited 2026-09-01, unchanged since 2026-08-31)
+## Vercel project status
 
-`vercel projects ls` under account `alexmogadesantiago-7031` shows one project:
+The frontend is already deployed and live at
+`https://tdrassistantproject.vercel.app` (HTTP 200, audited 2026-09-01).
 
-| Project | Production URL | Notes |
-|---|---|---|
-| `moga_automatizaciones` | `https://mogaautomatizaciones.vercel.app` | **Not confirmed** to be the Automation Center frontend. |
+### Wiring the frontend to the backend (human steps — dashboard)
 
-No deploy was performed. Do not `vercel deploy`/link this repo to an existing
-project without confirming it is the intended target — it would overwrite that
-project.
-
-### Vercel setup (human steps — dashboard, not run here)
+Once `https://<service>.onrender.com/api/health` returns 200:
 
 ```
-Vercel → Add New… → Project → Import Git Repository → <this repo>
-  Root Directory:    frontend
-  Framework Preset:  Vite            (auto-detected; frontend/vercel.json confirms it)
-  Build Command:     npm run build   (from vercel.json)
-  Output Directory:  dist            (from vercel.json)
-  Install Command:   npm install     (from vercel.json)
-  Environment Variables:
-      VITE_API_URL = https://<your-app-name>.fly.dev     ← only after the Fly backend is live
-      (VITE_WS_URL and VITE_APP_ENV optional)
+Vercel → Project (tdrassistantproject) → Settings → Environment Variables
+  VITE_API_URL = https://<service>.onrender.com        (Production)
+  (VITE_WS_URL is derived automatically — leave unset)
+Then: Deployments → … → Redeploy   (env vars only apply to a new build)
 ```
 
 Do **not** add any `AC_*`, `POSTGRES_*`, `N8N_*`, token, or `.env` value to
 Vercel — the frontend needs none of them.
 
-After both are live: `fly secrets set AC_CORS_ORIGINS='https://<vercel-domain>'`
-on the backend so the browser is allowed to call it.
+After that, on the Render service set
+`AC_CORS_ORIGINS = https://tdrassistantproject.vercel.app` so the browser is
+allowed to call the backend.
