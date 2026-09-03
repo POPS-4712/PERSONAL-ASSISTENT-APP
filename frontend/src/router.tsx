@@ -3,6 +3,7 @@ import { useAuth } from "@/stores/auth";
 import { Spinner } from "@/components/ui";
 import { AppLayout } from "@/layouts/AppLayout";
 import { LoginPage } from "@/pages/LoginPage";
+import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { ProfilesPage } from "@/pages/ProfilesPage";
 import { ProfileDetailPage } from "@/pages/ProfileDetailPage";
@@ -49,7 +50,10 @@ export function PublicOnly() {
 export const routes: RouteObject[] = [
   {
     element: <PublicOnly />,
-    children: [{ path: "/login", element: <LoginPage /> }],
+    children: [
+      { path: "/login", element: <LoginPage /> },
+      { path: "/register", element: <RegisterPage /> },
+    ],
   },
   {
     element: <RequireAuth />,

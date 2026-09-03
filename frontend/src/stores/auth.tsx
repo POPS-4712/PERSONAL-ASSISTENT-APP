@@ -26,6 +26,7 @@ interface AuthCtx {
   error: string | null;
   isAdmin: boolean;
   login: (identifier: string, password: string) => Promise<void>;
+  register: (email: string, username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -113,6 +114,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const register = useCallback(
+    async (email: string, username: string, password: string) => {
+      setError(null);
+      try {
+        const res = await authApi.register(email, username, password);
+        setSession(fromTokenResponse(res));
+        setUser(res.user);
+        setStatus("authenticated");
+      } catch (err) {
+        const message =
+          err instanceof ApiError
+            ? err.status === 409
+              ? "That email or username is already registered."
+              : err.message
+            : "Unable to create the account right now.";
+        setError(message);
+        throw err;
+      }
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     const s = getSession();
     if (s?.refresh_token) {
@@ -137,10 +160,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       isAdmin: user?.role === "admin",
       login,
+      register,
       logout,
       clearError,
     }),
-    [status, user, error, login, logout, clearError],
+    [status, user, error, login, register, logout, clearError],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

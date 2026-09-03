@@ -56,6 +56,21 @@ def test_login_and_me(client):
     assert me.json()["username"] == username
 
 
+def test_login_username_is_case_insensitive(client):
+    reg = _reg(client, username="MixedCaseUser").json()
+    assert reg["user"]["username"] == "MixedCaseUser"
+    r = client.post(
+        "/api/auth/login", json={"identifier": "mixedcaseuser", "password": GOOD_PW}
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_register_duplicate_username_differing_case_is_409(client):
+    _reg(client, username="Duplicate1")
+    r = _reg(client, username="duplicate1")
+    assert r.status_code == 409
+
+
 def test_login_wrong_password_is_401_generic(client):
     reg = _reg(client).json()
     r = client.post(

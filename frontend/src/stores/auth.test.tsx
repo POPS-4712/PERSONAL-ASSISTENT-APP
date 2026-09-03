@@ -7,7 +7,7 @@ import { authEvents } from "@/api/client";
 import { sampleToken, sampleUser } from "@/test/utils";
 
 function Probe() {
-  const { status, user, isAdmin, login, logout, error } = useAuth();
+  const { status, user, isAdmin, login, register, logout, error } = useAuth();
   return (
     <div>
       <span data-testid="status">{status}</span>
@@ -15,6 +15,7 @@ function Probe() {
       <span data-testid="admin">{String(isAdmin)}</span>
       <span data-testid="error">{error ?? "-"}</span>
       <button onClick={() => void login("admin", "pw").catch(() => {})}>login</button>
+      <button onClick={() => void register("a@b.co", "admin", "Passw0rd!!").catch(() => {})}>register</button>
       <button onClick={() => logout()}>logout</button>
     </div>
   );
@@ -52,6 +53,33 @@ describe("AuthProvider", () => {
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("authenticated"));
     expect(screen.getByTestId("user")).toHaveTextContent("admin");
     expect(screen.getByTestId("admin")).toHaveTextContent("true");
+  });
+
+  it("registers, stores the session and authenticates", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(sampleToken()), { status: 201 })),
+    );
+    renderProbe();
+    await act(async () => {
+      screen.getByText("register").click();
+    });
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("authenticated"));
+    expect(screen.getByTestId("user")).toHaveTextContent("admin");
+  });
+
+  it("surfaces a friendly message when the email/username is taken (409)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ detail: "email or username already in use" }), { status: 409 })),
+    );
+    renderProbe();
+    await act(async () => {
+      screen.getByText("register").click();
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("error")).toHaveTextContent("already registered"),
+    );
   });
 
   it("surfaces a friendly message on 401", async () => {

@@ -18,6 +18,8 @@ import type {
 export const authApi = {
   login: (identifier: string, password: string) =>
     api.post<TokenResponse>("/api/auth/login", { identifier, password }),
+  register: (email: string, username: string, password: string) =>
+    api.post<TokenResponse>("/api/auth/register", { email, username, password }),
   refresh: (refresh_token: string) => api.post<TokenResponse>("/api/auth/refresh", { refresh_token }),
   logout: (refresh_token: string) => api.post<{ revoked: boolean }>("/api/auth/logout", { refresh_token }),
   me: () => api.get<User>("/api/auth/me"),

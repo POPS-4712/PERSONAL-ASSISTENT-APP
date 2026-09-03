@@ -57,8 +57,12 @@ def register_user(
     email = email.strip().lower()
     username = username.strip()
 
+    # email is stored lower-cased (below), so a plain match stays index-friendly;
+    # username keeps its display casing, so collision-check it case-insensitively.
     exists = db.scalar(
-        select(User).where((User.email == email) | (User.username == username))
+        select(User).where(
+            (User.email == email) | (func.lower(User.username) == username.lower())
+        )
     )
     if exists is not None:
         # Same response whether it was the email or the username that collided.
@@ -131,7 +135,9 @@ def login(
 ) -> dict:
     ident = identifier.strip().lower()
     user = db.scalar(
-        select(User).where((User.email == ident) | (User.username == identifier.strip()))
+        select(User).where(
+            (User.email == ident) | (func.lower(User.username) == ident)
+        )
     )
     if user is None:
         dummy_verify(password)  # constant-time-ish: no enumeration
