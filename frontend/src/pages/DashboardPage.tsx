@@ -85,7 +85,14 @@ export function DashboardPage() {
             {status.data && (
               <div>
                 {status.data.services.map((s) => (
-                  <ServiceRow key={s.name} name={s.name} online={s.online} latency={s.latency_ms} detail={s.detail} />
+                  <ServiceRow
+                    key={s.name}
+                    name={s.name}
+                    status={s.status}
+                    online={s.online}
+                    latency={s.latency_ms}
+                    detail={s.detail}
+                  />
                 ))}
               </div>
             )}

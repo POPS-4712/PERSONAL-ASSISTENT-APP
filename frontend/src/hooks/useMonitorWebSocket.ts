@@ -3,11 +3,12 @@ import { WS_URL } from "@/config";
 import { getAccessToken } from "@/api/tokenStore";
 import { refreshAccessToken } from "@/api/client";
 import { createReconnectingSocket, type SocketStatus } from "@/websocket/socket";
-import type { HostMetrics, ServiceState } from "@/api/types";
+import type { HostMetrics, ServiceState, ServiceStatus } from "@/api/types";
 
 export interface MonitorServiceStatus {
   name: string;
-  online: boolean;
+  status: ServiceStatus;
+  online: boolean | null;
   latency_ms: number | null;
   detail: string;
   updatedAt: string;
@@ -33,7 +34,7 @@ interface ServiceEvent {
   type: "service.status";
   timestamp: string;
   service: string;
-  status: "online" | "offline";
+  status: ServiceStatus;
   latency_ms: number | null;
   detail: string;
 }
@@ -80,7 +81,8 @@ export function useMonitorWebSocket(): MonitorState {
             ...prev,
             [s.service]: {
               name: s.service,
-              online: s.status === "online",
+              status: s.status,
+              online: s.status === "online" ? true : s.status === "offline" ? false : null,
               latency_ms: s.latency_ms,
               detail: s.detail,
               updatedAt: s.timestamp,

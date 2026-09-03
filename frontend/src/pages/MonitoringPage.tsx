@@ -28,6 +28,7 @@ export function MonitoringPage() {
       ? monitor.services
       : (fallbackStatus.data?.services ?? []).map((s) => ({
           name: s.name,
+          status: s.status,
           online: s.online,
           latency_ms: s.latency_ms,
           detail: s.detail,
@@ -89,7 +90,14 @@ export function MonitoringPage() {
         ) : (
           <div>
             {services.map((s) => (
-              <ServiceRow key={s.name} name={s.name} online={s.online} latency={s.latency_ms} detail={s.detail} />
+              <ServiceRow
+                key={s.name}
+                name={s.name}
+                status={s.status}
+                online={s.online}
+                latency={s.latency_ms}
+                detail={s.detail}
+              />
             ))}
           </div>
         )}

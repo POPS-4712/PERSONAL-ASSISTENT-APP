@@ -89,7 +89,7 @@ class MetricsHub:
                         "type": "service.status",
                         "timestamp": ts,
                         "service": s.name,
-                        "status": "online" if s.online else "offline",
+                        "status": s.status,
                         "latency_ms": s.latency_ms,
                         "detail": s.detail,
                     }

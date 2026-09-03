@@ -4,6 +4,20 @@ import os
 
 os.environ.setdefault("AC_ENVIRONMENT", "testing")
 os.environ.setdefault("AC_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+# Keep the suite hermetic: a developer machine may export n8n / sidecar env
+# (e.g. for the MCP tooling) that would otherwise leak into get_settings() and
+# make the service-monitor tests non-deterministic. Integration tests that need
+# a real n8n set these explicitly.
+for _leak in (
+    "N8N_API_KEY",
+    "AC_N8N_API_KEY",
+    "AC_N8N_BASE_URL",
+    "N8N_API_URL",
+    "N8N_URL",
+    "AC_PLAYWRIGHT_BASE_URL",
+    "AC_PROFILE_BASE_URL",
+):
+    os.environ.pop(_leak, None)
 # A real Fernet key so the credential-manager tests exercise real encryption.
 os.environ.setdefault(
     "AC_CREDENTIAL_ENCRYPTION_KEY", "jpVUkdjPW0gHZ-5-bSUieGJIkYo3Mjdn-8rCdSV7Qro="

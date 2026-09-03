@@ -28,11 +28,15 @@ export interface HealthResponse {
   problems: string[];
 }
 
+export type ServiceStatus = "online" | "offline" | "not_configured" | "unknown";
+
 export interface ServiceState {
   name: string;
   kind: string;
   target: string;
-  online: boolean;
+  status: ServiceStatus;
+  /** Back-compat: true/false for online/offline, null for not_configured/unknown. */
+  online: boolean | null;
   detail: string;
   latency_ms: number | null;
 }
@@ -41,6 +45,7 @@ export interface SystemStatus {
   operational: boolean;
   state: "operational" | "degraded";
   degraded_services: string[];
+  not_configured_services: string[];
   services: ServiceState[];
   checked_at: string;
 }

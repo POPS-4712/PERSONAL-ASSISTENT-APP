@@ -74,6 +74,13 @@ class Settings(BaseSettings):
         default="", validation_alias=AliasChoices("AC_N8N_API_KEY", "N8N_API_KEY")
     )
 
+    # --- Optional sidecar services (Playwright scraper, profile API) ---
+    # Empty = not deployed in this environment -> the monitor reports
+    # NOT_CONFIGURED instead of OFFLINE. Docker Compose sets these to the
+    # in-network hostnames; a stand-alone backend deploy leaves them unset.
+    playwright_base_url: str = ""
+    profile_base_url: str = ""
+
     # --- Monitoring ---
     monitor_interval_seconds: float = 5.0
     compose_project: str = "personal-assistant"

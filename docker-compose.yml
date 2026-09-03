@@ -154,6 +154,10 @@ services:
       AC_N8N_BASE_URL: ${AC_N8N_BASE_URL:-http://n8n:5678}
       # Prefer AC_N8N_API_KEY (from .env); fall back to a plain N8N_API_KEY.
       AC_N8N_API_KEY: ${AC_N8N_API_KEY:-${N8N_API_KEY:-}}
+      # Sidecar services reachable on the compose network — the monitor probes
+      # these. A stand-alone deploy (Render) leaves them unset -> NOT_CONFIGURED.
+      AC_PLAYWRIGHT_BASE_URL: ${AC_PLAYWRIGHT_BASE_URL:-http://playwright:3000}
+      AC_PROFILE_BASE_URL: ${AC_PROFILE_BASE_URL:-http://profile:7777}
       AC_COMPOSE_PROJECT: personal-assistant
       TZ: ${TZ}
     depends_on:

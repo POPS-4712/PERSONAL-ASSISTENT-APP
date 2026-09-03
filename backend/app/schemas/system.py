@@ -7,7 +7,10 @@ class ServiceStateOut(BaseModel):
     name: str
     kind: str
     target: str
-    online: bool
+    # online | offline | not_configured | unknown
+    status: str
+    # kept for backward compatibility: true/false for online/offline, null otherwise
+    online: bool | None
     detail: str
     latency_ms: float | None
 
@@ -16,6 +19,7 @@ class SystemStatusOut(BaseModel):
     operational: bool
     state: str
     degraded_services: list[str]
+    not_configured_services: list[str] = []
     services: list[ServiceStateOut]
     checked_at: str
 

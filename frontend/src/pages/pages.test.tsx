@@ -35,7 +35,13 @@ const statusOk = {
   operational: true,
   state: "operational",
   degraded_services: [],
-  services: [{ name: "postgres", kind: "tcp", target: "postgres:5432", online: true, detail: "ok", latency_ms: 2 }],
+  not_configured_services: ["n8n", "playwright", "profile"],
+  services: [
+    { name: "postgres", kind: "db", target: "application database", status: "online", online: true, detail: "SELECT 1 ok", latency_ms: 2 },
+    { name: "n8n", kind: "http", target: "", status: "not_configured", online: null, detail: "AC_N8N_API_KEY not set", latency_ms: null },
+    { name: "playwright", kind: "http", target: "", status: "not_configured", online: null, detail: "AC_PLAYWRIGHT_BASE_URL not set", latency_ms: null },
+    { name: "profile", kind: "http", target: "", status: "not_configured", online: null, detail: "AC_PROFILE_BASE_URL not set", latency_ms: null },
+  ],
   checked_at: new Date().toISOString(),
 };
 const metricsOk = {
@@ -106,6 +112,22 @@ describe("DashboardPage", () => {
     expect(
       await screen.findByText("Unable to connect to the Automation Center backend.", {}, { timeout: 5000 }),
     ).toBeInTheDocument();
+  });
+
+  it("renders unconfigured services as 'not configured', not an outage", async () => {
+    installFetchStub({
+      "GET /api/health": { body: healthOk },
+      "GET /api/system/status": { body: statusOk },
+      "GET /api/system/metrics": { body: metricsOk },
+      "GET /api/n8n/health": { body: { base_url: "x", api_key_configured: false, reachable: false } },
+      "GET /api/n8n/workflows": { body: { data: [] } },
+    });
+    wrap(<DashboardPage />);
+    // postgres is fine -> global state stays Operational
+    expect(await screen.findByText(/Operational/)).toBeInTheDocument();
+    // optional services read as "not configured", never "offline"
+    expect(await screen.findAllByText("not configured")).toHaveLength(3);
+    expect(screen.queryByText("offline")).not.toBeInTheDocument();
   });
 });
 
