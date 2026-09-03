@@ -128,6 +128,9 @@ describe("DashboardPage", () => {
     // optional services read as "not configured", never "offline"
     expect(await screen.findAllByText("not configured")).toHaveLength(3);
     expect(screen.queryByText("offline")).not.toBeInTheDocument();
+    // the automations card agrees with the services card
+    expect(await screen.findByText("n8n is not configured")).toBeInTheDocument();
+    expect(screen.queryByText("n8n is offline")).not.toBeInTheDocument();
   });
 });
 
@@ -143,6 +146,19 @@ describe("AutomationsPage", () => {
     const runBtn = await screen.findByRole("button", { name: "Run" });
     await userEvent.click(runBtn);
     expect(await screen.findByText("Run unavailable")).toBeInTheDocument();
+  });
+
+  it("distinguishes an unconfigured n8n from an offline one", async () => {
+    setSession({ ...sampleToken(), expires_at: Date.now() + 60_000 });
+    installFetchStub({
+      "GET /api/n8n/health": {
+        body: { base_url: "http://n8n:5678", api_key_configured: false, status: "not_configured", reachable: false },
+      },
+      "GET /api/n8n/workflows": { status: 503, body: { detail: { code: "n8n_not_configured", message: "no key" } } },
+    });
+    wrap(<AutomationsPage />);
+    expect(await screen.findByText(/No n8n instance is configured/)).toBeInTheDocument();
+    expect(screen.queryByText("n8n is offline")).not.toBeInTheDocument();
   });
 
   it("shows the n8n offline empty state", async () => {

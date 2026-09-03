@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import {
+  n8nStateOf,
   useHealth,
   useN8nHealth,
   useSystemMetrics,
@@ -29,6 +30,8 @@ export function DashboardPage() {
 
   const m = metrics.data;
   const activeWorkflows = workflows.data?.data.filter((w) => w.active).length ?? 0;
+
+  const n8nState = n8nStateOf(n8n.data, n8n.isError);
 
   return (
     <div>
@@ -103,7 +106,12 @@ export function DashboardPage() {
           <CardTitle action={<Link to="/automations" className="text-xs text-brand hover:underline">All</Link>}>
             Automations (n8n)
           </CardTitle>
-          {n8n.data && !n8n.data.reachable ? (
+          {n8nState === "not_configured" ? (
+            <EmptyState
+              title="n8n is not configured"
+              description="Set AC_N8N_BASE_URL and AC_N8N_API_KEY on the backend to manage automations from here."
+            />
+          ) : n8nState === "offline" ? (
             <EmptyState
               title="n8n is offline"
               description="Automation workflows are temporarily unavailable."

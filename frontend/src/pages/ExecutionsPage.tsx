@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { useExecutions, useN8nHealth, useWorkflows } from "@/hooks/queries";
+import { n8nStateOf, useExecutions, useN8nHealth, useWorkflows } from "@/hooks/queries";
 import { EmptyState, PageHeader, Select } from "@/components/ui";
 import { ExecutionsTable } from "./executions/ExecutionsTable";
 
@@ -30,13 +30,18 @@ export function ExecutionsPage() {
     setParams(next, { replace: true });
   }
 
-  const n8nOffline = n8n.data ? n8n.data.reachable === false : n8n.isError;
+  const n8nState = n8nStateOf(n8n.data, n8n.isError);
 
   return (
     <div>
       <PageHeader title="Executions" description="Workflow run history from n8n." />
 
-      {n8nOffline ? (
+      {n8nState === "not_configured" ? (
+        <EmptyState
+          title="n8n is not configured"
+          description="Set AC_N8N_BASE_URL and AC_N8N_API_KEY on the backend to see execution history."
+        />
+      ) : n8nState === "offline" ? (
         <EmptyState title="n8n is offline" description="Execution history is temporarily unavailable." />
       ) : (
         <>

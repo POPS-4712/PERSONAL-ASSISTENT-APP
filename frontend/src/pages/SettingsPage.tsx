@@ -1,6 +1,6 @@
 import { useAuth } from "@/stores/auth";
 import { useTheme } from "@/stores/theme";
-import { useHealth, useN8nHealth, useSystemStatus } from "@/hooks/queries";
+import { n8nStateOf, useHealth, useN8nHealth, useSystemStatus } from "@/hooks/queries";
 import { Badge, Card, CardTitle, PageHeader, Select } from "@/components/ui";
 import { ServiceRow } from "@/components/common";
 import { API_URL, APP_ENV, WS_URL } from "@/config";
@@ -12,6 +12,7 @@ export function SettingsPage() {
   const health = useHealth();
   const status = useSystemStatus();
   const n8n = useN8nHealth();
+  const n8nState = n8nStateOf(n8n.data, n8n.isError);
 
   return (
     <div>
@@ -81,8 +82,18 @@ export function SettingsPage() {
             <div className="flex justify-between">
               <dt className="text-muted">n8n</dt>
               <dd>
-                <Badge tone={n8n.data?.reachable === false ? "danger" : n8n.data ? "success" : "neutral"}>
-                  {n8n.data?.reachable === false ? "offline" : n8n.data ? "connected" : "unknown"}
+                <Badge
+                  tone={
+                    n8nState === "offline"
+                      ? "danger"
+                      : n8nState === "not_configured"
+                        ? "warning"
+                        : n8nState === "online"
+                          ? "success"
+                          : "neutral"
+                  }
+                >
+                  {n8nState === "not_configured" ? "not configured" : n8nState}
                 </Badge>
               </dd>
             </div>

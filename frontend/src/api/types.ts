@@ -117,6 +117,8 @@ export interface CredentialTestResult {
 export interface N8nHealth {
   base_url: string;
   api_key_configured: boolean;
+  /** Same vocabulary as the service monitor. Absent on older backends. */
+  status?: Extract<ServiceStatus, "online" | "offline" | "not_configured">;
   reachable?: boolean;
   api_key_valid?: boolean;
   detail?: string;

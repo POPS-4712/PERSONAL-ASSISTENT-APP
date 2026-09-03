@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ApiError } from "@/api";
-import { useN8nHealth, useWorkflowMutations, useWorkflows } from "@/hooks/queries";
+import { n8nStateOf, useN8nHealth, useWorkflowMutations, useWorkflows } from "@/hooks/queries";
 import { useToast } from "@/stores/toast";
 import {
   Badge,
@@ -24,7 +24,7 @@ export function AutomationsPage() {
   const m = useWorkflowMutations();
   const toast = useToast();
 
-  const n8nOffline = n8n.data ? n8n.data.reachable === false : n8n.isError;
+  const n8nState = n8nStateOf(n8n.data, n8n.isError);
 
   function toggle(id: string, active: boolean) {
     const p = active ? m.deactivate.mutateAsync(id) : m.activate.mutateAsync(id);
@@ -53,25 +53,40 @@ export function AutomationsPage() {
         description="n8n workflows managed by Automation Center."
         actions={
           n8n.data && (
-            <Badge tone={n8n.data.reachable === false ? "danger" : n8n.data.api_key_valid === false ? "warning" : "success"}>
-              n8n {n8n.data.reachable === false ? "offline" : n8n.data.api_key_valid === false ? "no API key" : "connected"}
+            <Badge
+              tone={
+                n8nState === "offline"
+                  ? "danger"
+                  : n8nState === "not_configured" || n8n.data.api_key_valid === false
+                    ? "warning"
+                    : "success"
+              }
+            >
+              n8n{" "}
+              {n8nState === "offline"
+                ? "offline"
+                : n8nState === "not_configured"
+                  ? "not configured"
+                  : n8n.data.api_key_valid === false
+                    ? "invalid API key"
+                    : "connected"}
             </Badge>
           )
         }
       />
 
-      {n8nOffline ? (
+      {n8nState === "not_configured" ? (
+        <Card className="border-warn/40">
+          <p className="text-sm text-warn">
+            No n8n instance is configured on the backend. Set <code>AC_N8N_BASE_URL</code> and{" "}
+            <code>AC_N8N_API_KEY</code> to manage workflows from here.
+          </p>
+        </Card>
+      ) : n8nState === "offline" ? (
         <EmptyState
           title="n8n is offline"
           description="Automation workflows are temporarily unavailable. Check that the n8n service is running."
         />
-      ) : n8n.data?.api_key_configured === false ? (
-        <Card className="border-warn/40">
-          <p className="text-sm text-warn">
-            n8n is reachable but no API key is configured on the backend. Set <code>N8N_API_KEY</code> /
-            <code> AC_N8N_API_KEY</code> to manage workflows.
-          </p>
-        </Card>
       ) : (
         <QueryBoundary
           isLoading={workflows.isLoading}

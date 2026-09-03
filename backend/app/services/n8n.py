@@ -121,24 +121,36 @@ class N8nService:
     async def health(self) -> dict:
         """`GET {base}/healthz` — no API key needed. Also reports whether a key
         is configured and accepted.
+
+        `status` uses the same vocabulary as the service monitor
+        (`services_probe`): not_configured / online / offline. Without an API
+        key the integration is not wired up for this environment, so we do not
+        probe at all — hitting a Compose hostname that does not resolve would
+        report a misleading outage.
         """
         out: dict[str, Any] = {"base_url": self.base_url, "api_key_configured": bool(self.api_key)}
+        if not self.api_key:
+            out["status"] = "not_configured"
+            out["reachable"] = False
+            out["detail"] = "n8n API key is not configured (set AC_N8N_API_KEY)"
+            return out
         try:
             await self._request("GET", "/healthz", auth=False)
             out["reachable"] = True
+            out["status"] = "online"
         except N8nError as exc:
             out["reachable"] = False
+            out["status"] = "offline"
             out["detail"] = exc.message
             return out
-        if self.api_key:
-            try:
-                await self._request("GET", "/api/v1/workflows", params={"limit": 1})
-                out["api_key_valid"] = True
-            except N8nAuthError:
-                out["api_key_valid"] = False
-            except N8nError as exc:
-                out["api_key_valid"] = False
-                out["detail"] = exc.message
+        try:
+            await self._request("GET", "/api/v1/workflows", params={"limit": 1})
+            out["api_key_valid"] = True
+        except N8nAuthError:
+            out["api_key_valid"] = False
+        except N8nError as exc:
+            out["api_key_valid"] = False
+            out["detail"] = exc.message
         return out
 
     async def list_workflows(self, *, active: bool | None = None, limit: int = 100) -> list[dict]:

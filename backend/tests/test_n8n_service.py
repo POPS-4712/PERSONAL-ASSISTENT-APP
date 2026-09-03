@@ -108,6 +108,22 @@ async def test_health_reports_unreachable_without_raising():
     assert out["reachable"] is False and out["api_key_configured"] is True
 
 
+async def test_health_without_api_key_is_not_configured_and_does_not_probe():
+    calls = []
+
+    def spy(req):
+        calls.append(req.url.path)
+        return httpx.Response(200, json={"status": "ok"})
+
+    out = await _svc(spy, api_key="").health()
+    assert out["status"] == "not_configured"
+    assert out["api_key_configured"] is False
+    assert out["reachable"] is False
+    # an unconfigured integration must not be probed: a Compose hostname that
+    # does not resolve would otherwise be reported as an outage
+    assert calls == []
+
+
 async def test_health_ok_and_key_valid():
     def h(req: httpx.Request) -> httpx.Response:
         if req.url.path == "/healthz":
