@@ -231,3 +231,44 @@ export interface ProfileCompleteness {
   required_fields: string[];
   best: ProfileCompletenessReport | null;
 }
+
+/* ---------------------------- profile catalog ---------------------------- */
+
+/**
+ * How a field is picked. Nothing here is typed by the user except `text`,
+ * which only appears behind an "Otra" option.
+ */
+export type CatalogFieldKind = "multi" | "single" | "scale" | "toggle" | "text";
+
+export interface CatalogOption {
+  id: string;
+  label: string;
+}
+
+export interface CatalogField {
+  key: string;
+  /** Where the value is written inside `configuration`. */
+  path: string[];
+  label: string;
+  kind: CatalogFieldKind;
+  hint: string;
+  options: CatalogOption[];
+  /** Picking this option id reveals the free-text box below. */
+  free_text_trigger: string;
+  free_text_path: string[];
+  free_text_label: string;
+}
+
+export interface CatalogSection {
+  key: string;
+  title: string;
+  question: string;
+  description: string;
+  fields: CatalogField[];
+}
+
+export interface ProfileCatalog {
+  sections: CatalogSection[];
+  /** The sections the backend actually grades, so progress is not invented. */
+  required_sections: string[];
+}

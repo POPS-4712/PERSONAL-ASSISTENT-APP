@@ -8,6 +8,7 @@ from app.api.deps import get_current_user
 from app.db import get_db
 from app.models import User
 from app.schemas.profile import (
+    ProfileCatalogOut,
     ProfileCompletenessOut,
     ProfileCreate,
     ProfileDimensionsOut,
@@ -15,6 +16,7 @@ from app.schemas.profile import (
     ProfileOut,
     ProfileUpdate,
 )
+from app.services import profile_catalog
 from app.services import profiles as svc
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
@@ -37,6 +39,16 @@ def dimensions() -> ProfileDimensionsOut:
         dimensions=list(svc.PROFILE_DIMENSIONS),
         note="configuration is an open JSON object; unknown keys are accepted",
     )
+
+
+@router.get("/catalog", response_model=ProfileCatalogOut)
+def catalog() -> ProfileCatalogOut:
+    """The pickable options the personalisation UI renders.
+
+    Public (no session): it is a static vocabulary, contains nothing about any
+    user, and the login screen has no reason to hold it back.
+    """
+    return ProfileCatalogOut.model_validate(profile_catalog.as_dict())
 
 
 @router.get("/completeness", response_model=ProfileCompletenessOut)

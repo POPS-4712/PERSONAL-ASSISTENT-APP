@@ -62,3 +62,45 @@ class ProfileCompletenessOut(BaseModel):
     #: hard-coding a copy of the backend rule
     required_fields: list[str]
     best: ProfileCompletenessReport | None = None
+
+
+class CatalogOptionOut(BaseModel):
+    id: str
+    label: str
+
+
+class CatalogFieldOut(BaseModel):
+    key: str
+    #: where this field writes inside `configuration`
+    path: list[str]
+    label: str
+    #: multi | single | scale | toggle | text
+    kind: str
+    hint: str = ""
+    options: list[CatalogOptionOut] = []
+    #: selecting this option id reveals the free-text field below
+    free_text_trigger: str = ""
+    free_text_path: list[str] = []
+    free_text_label: str = ""
+
+
+class CatalogSectionOut(BaseModel):
+    key: str
+    title: str
+    question: str
+    description: str = ""
+    fields: list[CatalogFieldOut]
+
+
+class ProfileCatalogOut(BaseModel):
+    """Everything the visual profile builder needs to render itself.
+
+    Serving this from the backend is what keeps one vocabulary: adding a sector
+    or an interest is a change here, and the panel picks it up with no frontend
+    release.
+    """
+
+    sections: list[CatalogSectionOut]
+    #: the sections completeness actually grades, so the UI shows the backend's
+    #: progress rule rather than inventing its own
+    required_sections: list[str]

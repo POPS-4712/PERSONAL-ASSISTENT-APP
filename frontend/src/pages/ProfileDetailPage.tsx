@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useProfile, useProfileMutations } from "@/hooks/queries";
+import { useProfile, useProfileCatalog, useProfileMutations } from "@/hooks/queries";
 import { useToast } from "@/stores/toast";
 import { Badge, Button, Card, CardTitle, ConfirmDialog, PageHeader } from "@/components/ui";
 import { QueryBoundary, errorMessage } from "@/components/common";
 import { formatDateTime } from "@/utils/format";
 import { ProfileFormModal } from "./profiles/ProfileFormModal";
+import { ProfileSummary } from "./profiles/ProfileSummary";
 
 export function ProfileDetailPage() {
   const { id } = useParams<{ id: string }>();
   const profile = useProfile(id);
+  const catalog = useProfileCatalog();
   const m = useProfileMutations();
   const toast = useToast();
   const navigate = useNavigate();
@@ -24,8 +26,11 @@ export function ProfileDetailPage() {
         actions={
           profile.data && (
             <>
+              <Button onClick={() => navigate(`/profiles/${profile.data!.id}/personalise`)}>
+                Personalise
+              </Button>
               <Button variant="outline" onClick={() => setEditOpen(true)}>
-                Edit
+                Rename
               </Button>
               <Button variant="ghost" className="text-danger" onClick={() => setDeleteOpen(true)}>
                 Delete
@@ -104,14 +109,34 @@ export function ProfileDetailPage() {
             </Card>
 
             <Card className="lg:col-span-2">
-              <CardTitle>Configuration</CardTitle>
-              {Object.keys(profile.data.configuration).length === 0 ? (
-                <p className="text-sm text-muted">No personalisation set for this profile.</p>
-              ) : (
-                <pre className="max-h-96 overflow-auto rounded-lg bg-surface-2 p-3 text-xs text-fg">
+              <CardTitle
+                action={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/profiles/${profile.data!.id}/personalise`)}
+                  >
+                    Personalise
+                  </Button>
+                }
+              >
+                Personalisation
+              </CardTitle>
+              {/* The human reading of the stored options — the user never has
+                  to look at the JSON to know what their profile says. */}
+              <ProfileSummary
+                catalog={catalog.data}
+                configuration={profile.data.configuration}
+                emptyMessage="No personalisation set yet. Open Personalise and pick what interests you."
+              />
+              <details className="mt-4 border-t border-border pt-3">
+                <summary className="cursor-pointer text-xs text-muted hover:text-fg">
+                  Advanced — stored data
+                </summary>
+                <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-surface-2 p-3 text-xs text-fg">
                   {JSON.stringify(profile.data.configuration, null, 2)}
                 </pre>
-              )}
+              </details>
             </Card>
           </div>
         )}
@@ -127,7 +152,7 @@ export function ProfileDetailPage() {
             onSubmit={async (input) => {
               await m.update.mutateAsync({
                 id: profile.data!.id,
-                input: { name: input.name, description: input.description, configuration: input.configuration },
+                input: { name: input.name, description: input.description },
               });
               toast.success("Profile updated");
             }}

@@ -184,8 +184,17 @@ export function SetupPage() {
                 }
               />
               <p className="mt-3 text-sm">
-                <Link className="text-brand underline underline-offset-2" to="/profiles">
-                  {completeness.data?.profile_count ? "Edit your profile" : "Create your profile"}
+                <Link
+                  className="text-brand underline underline-offset-2"
+                  // straight into the picker when a profile already exists;
+                  // otherwise to the list, where creating one lands there anyway
+                  to={
+                    completeness.data?.best
+                      ? `/profiles/${completeness.data.best.profile_id}/personalise`
+                      : "/profiles"
+                  }
+                >
+                  {completeness.data?.profile_count ? "Pick your options" : "Create your profile"}
                 </Link>
               </p>
             </>

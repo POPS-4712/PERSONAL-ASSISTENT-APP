@@ -19,6 +19,7 @@ export const qk = {
   profile: (id: string) => ["profiles", id] as const,
   profileDimensions: ["profiles", "dimensions"] as const,
   profileCompleteness: ["profiles", "completeness"] as const,
+  profileCatalog: ["profiles", "catalog"] as const,
   serviceConfigs: ["services", "config"] as const,
   credentials: ["credentials"] as const,
   credentialStore: ["credentials", "store-status"] as const,
@@ -133,6 +134,16 @@ export function useProfileDimensions() {
     queryKey: qk.profileDimensions,
     queryFn: profilesApi.dimensions,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** The option catalogue the visual profile builder renders. Static, so it is
+ *  cached hard: it only changes when the backend ships new options. */
+export function useProfileCatalog() {
+  return useQuery({
+    queryKey: qk.profileCatalog,
+    queryFn: profilesApi.catalog,
+    staleTime: 60 * 60_000,
   });
 }
 

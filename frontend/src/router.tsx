@@ -7,6 +7,7 @@ import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { ProfilesPage } from "@/pages/ProfilesPage";
 import { ProfileDetailPage } from "@/pages/ProfileDetailPage";
+import { PersonalisePage } from "@/pages/PersonalisePage";
 import { CredentialsPage } from "@/pages/CredentialsPage";
 import { AutomationsPage } from "@/pages/AutomationsPage";
 import { AutomationDetailPage } from "@/pages/AutomationDetailPage";
@@ -66,6 +67,7 @@ export const routes: RouteObject[] = [
           { path: "dashboard", element: <DashboardPage /> },
           { path: "profiles", element: <ProfilesPage /> },
           { path: "profiles/:id", element: <ProfileDetailPage /> },
+          { path: "profiles/:id/personalise", element: <PersonalisePage /> },
           { path: "credentials", element: <CredentialsPage /> },
           { path: "automations", element: <AutomationsPage /> },
           { path: "automations/:id", element: <AutomationDetailPage /> },

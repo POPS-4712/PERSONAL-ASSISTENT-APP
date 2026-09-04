@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models import EventSeverity, Profile
 from app.services import audit
+from app.services import profile_catalog
 
 PROFILE_DIMENSIONS: tuple[str, ...] = (
     "formacion",
@@ -223,7 +224,11 @@ def create_profile(
         user_id=user_id,
         name=name,
         description=(description or "").strip(),
-        configuration=configuration or {},
+        # Store the catalogue's vocabulary, whoever wrote it: the visual picker
+        # already speaks it, and this converts an API caller (or an older
+        # hand-written profile being re-saved) without losing anything it does
+        # not recognise.
+        configuration=profile_catalog.normalise_configuration(configuration),
         is_active=True,
         is_primary=bool(make_primary or first),
     )
@@ -273,7 +278,7 @@ def update_profile(
     if description is not None:
         profile.description = description.strip()
     if configuration is not None:
-        profile.configuration = configuration
+        profile.configuration = profile_catalog.normalise_configuration(configuration)
     if is_active is not None:
         if not is_active and profile.is_primary:
             raise ProfileError("cannot deactivate the primary profile", 409)
@@ -311,7 +316,7 @@ def duplicate_profile(
         user_id=user_id,
         name=name,
         description=src.description,
-        configuration=dict(src.configuration or {}),
+        configuration=profile_catalog.normalise_configuration(src.configuration),
         is_active=True,
         is_primary=False,
     )

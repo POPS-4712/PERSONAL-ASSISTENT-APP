@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useProfileMutations, useProfiles } from "@/hooks/queries";
 import { useToast } from "@/stores/toast";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, PageHeader } from "@/components/ui";
@@ -9,6 +9,7 @@ import type { Profile } from "@/api/types";
 import { ProfileFormModal } from "./profiles/ProfileFormModal";
 
 export function ProfilesPage() {
+  const navigate = useNavigate();
   const profiles = useProfiles();
   const m = useProfileMutations();
   const toast = useToast();
@@ -155,14 +156,18 @@ export function ProfilesPage() {
         submitting={m.create.isPending || m.update.isPending}
         onSubmit={async (input) => {
           if (editing) {
+            // configuration is deliberately not sent: the visual builder owns
+            // it, so renaming a profile can never wipe someone's selections
             await m.update.mutateAsync({
               id: editing.id,
-              input: { name: input.name, description: input.description, configuration: input.configuration },
+              input: { name: input.name, description: input.description },
             });
             toast.success("Profile updated");
           } else {
-            await m.create.mutateAsync(input);
-            toast.success("Profile created");
+            const created = await m.create.mutateAsync(input);
+            toast.success("Profile created", "Now pick what interests you.");
+            // a brand-new profile is empty, so send the user straight to the picker
+            navigate(`/profiles/${created.id}/personalise`);
           }
         }}
       />

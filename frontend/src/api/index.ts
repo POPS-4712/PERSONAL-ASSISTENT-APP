@@ -9,6 +9,7 @@ import type {
   N8nHealth,
   N8nWorkflow,
   Profile,
+  ProfileCatalog,
   ProfileCompleteness,
   ProfileDimensions,
   ServiceConfig,
@@ -55,6 +56,8 @@ export const profilesApi = {
   get: (id: string) => api.get<Profile>(`/api/profiles/${id}`),
   dimensions: () => api.get<ProfileDimensions>("/api/profiles/dimensions"),
   completeness: () => api.get<ProfileCompleteness>("/api/profiles/completeness"),
+  /** The pickable options the personalisation UI renders (public). */
+  catalog: () => api.getPublic<ProfileCatalog>("/api/profiles/catalog"),
   create: (input: ProfileInput) => api.post<Profile>("/api/profiles", input),
   update: (
     id: string,
