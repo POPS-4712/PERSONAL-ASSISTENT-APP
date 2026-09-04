@@ -141,6 +141,20 @@ def test_rejects_a_url_without_a_scheme(env_unset, db_session):
         svc.upsert(db_session, "n8n", base_url="n8n.example.com")
 
 
+def test_rejects_a_cloud_metadata_endpoint(env_unset, db_session):
+    """An admin must not be able to aim the health prober at instance metadata."""
+    for bad in ("http://169.254.169.254", "http://169.254.1.1/health"):
+        with pytest.raises(svc.ServiceConfigError):
+            svc.upsert(db_session, "playwright", base_url=bad)
+
+
+def test_allows_a_private_service_address(env_unset, db_session):
+    """Private is the NORMAL case: a Docker sidecar or a Render private service."""
+    for good in ("http://playwright:3000", "http://10.0.0.5:3000", "http://127.0.0.1:3000"):
+        resolved = svc.upsert(db_session, "playwright", base_url=good)
+        assert resolved.base_url == good
+
+
 def test_rejects_an_unknown_service(env_unset, db_session):
     with pytest.raises(svc.ServiceConfigError):
         svc.upsert(db_session, "nope", base_url="https://x.example.com")

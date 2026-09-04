@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core import crypto
+from app.core.ssrf import BlockedRequestError, assert_not_metadata_url
 from app.models import ServiceConfig
 
 DATABASE = "database"
@@ -258,6 +259,14 @@ def upsert(
         url = base_url.strip().rstrip("/")
         if url and not url.startswith(("http://", "https://")):
             raise ServiceConfigError("base_url must start with http:// or https://")
+        if url:
+            # Private addresses are legitimate here (a Docker sidecar, a Render
+            # private service), so this only refuses cloud metadata endpoints -
+            # nothing that could ever be a real service.
+            try:
+                assert_not_metadata_url(url)
+            except BlockedRequestError as exc:
+                raise ServiceConfigError(str(exc)) from exc
         row.base_url = url
 
     if clear_secret:

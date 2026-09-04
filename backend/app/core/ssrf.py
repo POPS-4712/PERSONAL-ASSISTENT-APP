@@ -110,6 +110,42 @@ def assert_public_url(url: str) -> list[IpAddress]:
     return ips
 
 
+def assert_not_metadata_url(url: str) -> None:
+    """Weaker guard for *operator-configured* service endpoints.
+
+    ``assert_public_url`` is the right rule for a URL a user typed into a
+    credential: it must be publicly routable. It is the wrong rule here,
+    because the legitimate value for a service endpoint is usually private -
+    ``http://playwright:3000`` on a Docker network, or a Render private
+    service. Blocking those would break the product.
+
+    What has no legitimate use as a service endpoint is a cloud metadata
+    address, so that is what this refuses: an admin (or anyone who has taken
+    an admin account) must not be able to aim the health prober at
+    ``169.254.169.254`` and use response codes and timings as an oracle.
+
+    Note this is a narrower guarantee than ``assert_public_url``. Configuring
+    a service endpoint is an admin-only, audited action, and the probe returns
+    only a status code and a latency - never a response body.
+    """
+    parts = urlsplit(url)
+    scheme = parts.scheme.lower()
+    if scheme not in _ALLOWED_SCHEMES:
+        raise BlockedRequestError(f"scheme {parts.scheme!r} is not allowed (http/https only)")
+    host = parts.hostname
+    if not host:
+        raise BlockedRequestError("URL has no host")
+
+    if host in _ALWAYS_BLOCK:
+        raise BlockedRequestError(f"{host} is a cloud metadata endpoint")
+    try:
+        ip = _normalise(ipaddress.ip_address(host))
+    except ValueError:
+        return  # a hostname: resolution happens at probe time, see the note above
+    if str(ip) in _ALWAYS_BLOCK or ip.is_link_local:
+        raise BlockedRequestError(f"{ip} is a link-local / metadata address")
+
+
 async def guarded_get(
     url: str,
     *,

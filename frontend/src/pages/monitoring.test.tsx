@@ -61,8 +61,7 @@ beforeEach(() => {
   setSession({
     access_token: "t",
     refresh_token: "r",
-    token_type: "bearer",
-    expires_in: 1800,
+    expires_at: Date.now() + 30 * 60_000,
     user: sampleUser,
   });
   // No real WebSocket in jsdom: the page must fall back to the REST snapshot.

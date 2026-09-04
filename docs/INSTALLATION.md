@@ -93,6 +93,71 @@ sudo dpkg -i automation-platform-<v>-<arch>.deb && sudo automation-platform-inst
 
 Si un puerto está ocupado, el instalador elige otro y lo guarda en `.env`.
 
+## Primer arranque: configurar sin tocar ficheros
+
+Desde la v0.5 **no hace falta editar `.env`** para el uso normal. Al abrir el
+panel por primera vez ve a **Setup** (menú lateral) y sigue los seis pasos:
+
+```
+WELCOME  ->  PROFILE  ->  SERVICES  ->  AUTOMATIONS  ->  SYSTEM CHECK  ->  READY
+```
+
+Ningún paso se marca a mano: cada uno lee el estado real del sistema, y READY
+solo aparece cuando la comprobación pasa de verdad.
+
+### PROFILE
+
+Las automatizaciones filtran y puntúan contra tu perfil. Se guarda en
+PostgreSQL y el monitor lo marca `CONFIGURED` solo cuando los campos mínimos
+llevan datos reales:
+
+| Campo | Claves aceptadas |
+|---|---|
+| Profesión | `profesion`, `sector`, `objetivo_profesional`, `formacion` |
+| Ubicación | `ubicacion`, `ubicacion_laboral`, `localizacion` |
+| Intereses | `intereses`, `temas`, `topics` |
+| Preferencias | `preferencias`, `preferencias_laborales`, `preferencias_noticias`, `modalidad`, `automatizaciones` |
+
+Un perfil creado pero vacío, o con los desplegables sin tocar (`[]`), **no**
+cuenta como configurado: marcarlo en verde mandaría a los workflows a filtrar
+sin criterio.
+
+### SERVICES
+
+En **Ajustes → Servicios** (o en el paso Services del asistente) apuntas la
+plataforma a tus propias instancias:
+
+| Servicio | Necesita | Dónde se obtiene |
+|---|---|---|
+| **n8n** | URL pública + API key | La URL de tu n8n; la key en n8n → Settings → n8n API |
+| **Playwright** | URL | El sidecar de scraping (en local: `http://playwright:3000`) |
+| **Gemini** | API key | <https://aistudio.google.com/app/apikey> |
+
+Lo que guardes aquí se cifra en PostgreSQL y **tiene prioridad sobre las
+variables de entorno**. Se aplica en la siguiente comprobación de salud
+(≤ 5 s): sin reinicio y sin redespliegue. La clave nunca vuelve al navegador;
+el panel solo muestra una pista tipo `...a3f9`.
+
+Cada tarjeta tiene **Test connection**, que ejecuta exactamente la misma sonda
+que el monitor — un test en verde y un panel en verde no pueden discrepar.
+
+### SYSTEM CHECK
+
+El botón **Check services** de `/monitoring` fuerza una comprobación real sin
+caché. Estados posibles:
+
+| Estado | Significado |
+|---|---|
+| `ONLINE` | responde |
+| `CONFIGURED` | configurado y verificado, pero no es algo que se pueda "pinguear" (perfil, clave de IA aceptada) |
+| `DEGRADED` | responde pero solo funciona a medias (n8n vivo que rechaza la API key) |
+| `INVALID` | credenciales rechazadas por el proveedor |
+| `OFFLINE` | configurado pero no responde |
+| `NOT_CONFIGURED` | no hay nada configurado aquí. **No es un error** |
+
+`NOT_CONFIGURED` nunca pone la plataforma en `degraded`: un despliegue que solo
+tiene backend no está roto.
+
 ## Gestión (sin PowerShell)
 
 Menú Inicio → **Automation Center**:
@@ -123,6 +188,12 @@ Icono de bandeja (si lo activaste): mismo menú + estado ● Running/Stopped.
 | `workflow_entity ≠ 4` | Revisa `docker compose logs n8n`. Los 4 IDs esperados: `0ikHqQCWMke67aoI`, `pa01email000001`, `pa02laboral00001`, `pa04marcapersonal`. |
 | Puerto ocupado | El instalador remapea y lo anota en `.env`; mira la línea `n8n:… backend:…` del log. |
 | El panel no abre | `http://localhost:3000` — comprueba `pa-frontend` en el menú → Estado. |
+| Todo sale `NOT_CONFIGURED` | Normal si solo has desplegado el backend. Configúralo en Ajustes → Servicios. |
+| n8n sale `DEGRADED` | Es alcanzable pero rechaza la API key. Genérala de nuevo en n8n → Settings → n8n API y vuelve a guardarla en el panel. |
+| Al guardar una clave sale 503 | Falta `AC_CREDENTIAL_ENCRYPTION_KEY`. Sin ella no se puede cifrar nada. |
+| Gemini sale `INVALID` | El proveedor rechaza la clave (no es un fallo de red). Compruébala en Google AI Studio. |
+| PROFILE sigue en `NOT_CONFIGURED` | El perfil existe pero le faltan campos. Setup → Profile los lista uno a uno. |
+| El estado no cambia tras configurar | El veredicto está cacheado. Pulsa **Check services**. |
 
 Detalle de actualización y backup: [UPGRADE.md](UPGRADE.md) ·
 [BACKUP-RESTORE.md](BACKUP-RESTORE.md).

@@ -40,3 +40,38 @@ def test_runtime_validation_prod_passes_with_real_values():
         debug=False,
     )
     assert s.validate_runtime() == []
+
+
+def _prod(**over) -> Settings:
+    base = dict(
+        environment="production",
+        jwt_secret="x" * 48,
+        credential_encryption_key="k" * 44,
+        database_url="postgresql+psycopg://u:p@db/ac",
+        debug=False,
+        cors_origins="https://panel.example.com",
+    )
+    base.update(over)
+    return Settings(**base)
+
+
+def test_prod_rejects_wildcard_cors():
+    """The API sends Allow-Credentials, so '*' can never work. Say so at boot
+    instead of letting it look like a mysterious CORS failure in the browser."""
+    problems = _prod(cors_origins="*").validate_runtime()
+    assert any("AC_CORS_ORIGINS" in p for p in problems)
+
+
+def test_prod_rejects_a_catch_all_origin_regex():
+    problems = _prod(cors_origin_regex=".*").validate_runtime()
+    assert any("catch-all" in p for p in problems)
+
+
+def test_prod_rejects_no_origins_at_all():
+    problems = _prod(cors_origins="").validate_runtime()
+    assert any("no browser origin" in p for p in problems)
+
+
+def test_prod_accepts_a_scoped_preview_regex():
+    s = _prod(cors_origin_regex=r"^https://ac-[a-z0-9-]+\.vercel\.app$")
+    assert s.validate_runtime() == []

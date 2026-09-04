@@ -17,6 +17,36 @@ El de Email necesita además OAuth de Google. Todo el detalle en
 
 ---
 
+## Documentación
+
+| Documento | Para qué |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Cómo encaja todo y por qué: componentes, configuración, modelo de salud, seguridad |
+| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Instalación y primer arranque (asistente de configuración) |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Trabajar en el código: tests, migraciones, añadir integraciones |
+| [docs/CLOUD-DEPLOYMENT.md](docs/CLOUD-DEPLOYMENT.md) | Despliegue Vercel + Render |
+| [CREDENCIALES.md](CREDENCIALES.md) | Qué credencial necesita cada automatización |
+
+## Configuración sin terminal
+
+Desde la v0.5 la configuración normal se hace desde el panel, no editando
+ficheros. Lo que guardes en **Ajustes → Servicios** (URL de n8n, API keys,
+endpoint del scraper) se cifra en PostgreSQL, **tiene prioridad sobre las
+variables de entorno** y se aplica en la siguiente comprobación de salud, sin
+reiniciar ni redesplegar. Las variables `AC_*` siguen existiendo como valor por
+defecto para arranques desatendidos (instalador, Docker, CI).
+
+El panel distingue estados reales y no los inventa:
+
+```
+ONLINE          responde
+CONFIGURED      configurado y verificado (perfil, clave de IA aceptada)
+DEGRADED        responde pero solo a medias (n8n vivo que rechaza la API key)
+INVALID         credenciales rechazadas por el proveedor
+OFFLINE         configurado pero sin respuesta
+NOT_CONFIGURED  no hay nada configurado aquí — no es un error
+```
+
 ## Requisitos
 
 - **Docker Desktop** (Windows x64/ARM64, Linux, macOS).

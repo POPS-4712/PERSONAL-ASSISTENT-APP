@@ -31,10 +31,22 @@ visitor's browser; `localhost` there is the visitor's own machine, not your
 server. A cloud frontend therefore requires a backend published on a real
 public HTTPS host.
 
-**Status: the backend is prepared for Render but NOT yet deployed** — Render's
-first deploy needs a human (GitHub connect + browser login), and the two
-secret env vars must be pasted in the Render Dashboard. Once deployed the
-public URL is `https://<service>.onrender.com`.
+**Status: the backend is deployed and live** at
+`https://automation-center-api.onrender.com` (`/api/health` returns
+`status: ok`, `database: ok`).
+
+The Blueprint also declares two further services, which still need a human to
+apply it (Render's first deploy requires a GitHub connect + browser login):
+
+| Service | Type | Why |
+|---|---|---|
+| `automation-center-n8n` | web (public) | Gmail/Calendar and any inbound webhook must reach it, and you open its editor in a browser. |
+| `automation-center-playwright` | **pserv (private)** | A headless browser that fetches arbitrary URLs is never published. |
+
+After `Apply`, open the n8n URL, create the owner account, then Settings →
+n8n API → create an API key, and paste it into Automation Center →
+Settings → Services → n8n. It is stored encrypted in Postgres and takes effect
+on the next health check — you do not have to return to the Render dashboard.
 
 ### Why Render
 

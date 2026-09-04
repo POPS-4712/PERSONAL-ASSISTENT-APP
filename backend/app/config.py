@@ -181,6 +181,20 @@ class Settings(BaseSettings):
                 problems.append("AC_CREDENTIAL_ENCRYPTION_KEY is unset (needed to store credentials)")
             if self.debug:
                 problems.append("AC_DEBUG must be false in production")
+            # The API sends Allow-Credentials: true, so a wildcard origin is
+            # rejected by every browser anyway. Failing here turns a confusing
+            # "CORS is broken" into a message that names the cause.
+            if "*" in self.cors_origin_list:
+                problems.append(
+                    "AC_CORS_ORIGINS cannot be '*' when credentials are allowed; "
+                    "list the exact frontend origin(s)"
+                )
+            if not self.cors_origin_list and not self.cors_origin_regex.strip():
+                problems.append("AC_CORS_ORIGINS is empty; no browser origin can reach the API")
+            # A regex that matches everything re-opens the hole the check above
+            # closes, so refuse the obvious catch-alls.
+            if self.cors_origin_regex.strip() in (".*", "^.*$", ".+"):
+                problems.append("AC_CORS_ORIGIN_REGEX is a catch-all; scope it to your own domain")
         if looks_placeholder(self.database_url):
             problems.append("AC_DATABASE_URL is unset or a placeholder")
         return problems
