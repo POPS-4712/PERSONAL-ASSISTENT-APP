@@ -53,8 +53,10 @@ async def run_test(provider: str, ctype: CredentialType, secret: dict, meta: dic
             headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
         )
     if provider in ("gemini", "google_ai", "google-ai", "googleai"):
+        # Header, not `?key=`: query strings are logged by proxies, headers are not.
         return await _get(
-            "https://generativelanguage.googleapis.com/v1beta/models", params={"key": key}
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            headers={"x-goog-api-key": key},
         )
     if provider in ("openrouter",):
         return await _get(

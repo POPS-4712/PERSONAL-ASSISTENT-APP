@@ -28,17 +28,37 @@ export interface HealthResponse {
   problems: string[];
 }
 
-export type ServiceStatus = "online" | "offline" | "not_configured" | "unknown";
+/**
+ * `online`         reachable and answering (HTTP / TCP services)
+ * `configured`     set up and verified, but not something you can ping
+ *                  (profile data in Postgres, an accepted Gemini key)
+ * `degraded`       reachable but only partly usable (n8n up, API key rejected)
+ * `invalid`        configured with credentials the provider refuses
+ * `offline`        configured, but not responding
+ * `not_configured` nothing configured here - deliberately NOT an error
+ * `unknown`        the probe itself could not run
+ */
+export type ServiceStatus =
+  | "online"
+  | "configured"
+  | "degraded"
+  | "invalid"
+  | "offline"
+  | "not_configured"
+  | "unknown";
 
 export interface ServiceState {
   name: string;
   kind: string;
   target: string;
   status: ServiceStatus;
-  /** Back-compat: true/false for online/offline, null for not_configured/unknown. */
+  /** Back-compat: true for online/configured, false for offline/invalid, else null. */
   online: boolean | null;
+  configured?: boolean;
   detail: string;
   latency_ms: number | null;
+  checked_at?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface SystemStatus {
@@ -148,4 +168,66 @@ export interface N8nExecution {
 
 export interface Paginated<T> {
   data: T[];
+}
+
+/* ------------------------- service configuration ------------------------- */
+
+/** Where the effective configuration came from. */
+export type ConfigSource = "database" | "environment" | "none";
+
+/**
+ * One integration's configuration as the panel sees it. Never carries the
+ * secret itself - only `secret_configured` and a `secret_hint` like "…a3f9".
+ */
+export interface ServiceConfig {
+  service: string;
+  label: string;
+  configured: boolean;
+  enabled: boolean;
+  source: ConfigSource;
+  base_url: string;
+  requires_url: boolean;
+  requires_secret: boolean;
+  secret_configured: boolean;
+  secret_hint: string;
+  /** Names of the settings still missing, ready to show to the user. */
+  missing: string[];
+  last_tested_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_detail: string;
+}
+
+export interface ServiceConfigUpdate {
+  base_url?: string;
+  /** Omit to keep the stored secret; use `clear_secret` to remove it. */
+  secret?: string;
+  clear_secret?: boolean;
+  enabled?: boolean;
+}
+
+export interface ServiceTestResult {
+  service: string;
+  ok: boolean;
+  status: ServiceStatus;
+  detail: string;
+  latency_ms: number | null;
+}
+
+/* --------------------------- profile completeness ------------------------ */
+
+export interface ProfileCompletenessReport {
+  profile_id: string;
+  name: string;
+  complete: boolean;
+  filled: string[];
+  missing: string[];
+  score: number;
+}
+
+export interface ProfileCompleteness {
+  configured: boolean;
+  profile_count: number;
+  detail: string;
+  required_fields: string[];
+  best: ProfileCompletenessReport | null;
 }

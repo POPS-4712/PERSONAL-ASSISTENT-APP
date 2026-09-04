@@ -8,6 +8,7 @@ from app.api.deps import get_current_user
 from app.db import get_db
 from app.models import User
 from app.schemas.profile import (
+    ProfileCompletenessOut,
     ProfileCreate,
     ProfileDimensionsOut,
     ProfileDuplicate,
@@ -35,6 +36,25 @@ def dimensions() -> ProfileDimensionsOut:
     return ProfileDimensionsOut(
         dimensions=list(svc.PROFILE_DIMENSIONS),
         note="configuration is an open JSON object; unknown keys are accepted",
+    )
+
+
+@router.get("/completeness", response_model=ProfileCompletenessOut)
+def completeness(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> ProfileCompletenessOut:
+    """Is the caller profile usable by the automations?
+
+    Drives the setup wizard and the PROFILE tile on /monitoring. A profile row
+    existing is not enough - the minimum fields must carry real values.
+    """
+    report = svc.completeness_for_user(db, user.id)
+    return ProfileCompletenessOut(
+        configured=report["configured"],
+        profile_count=report["profile_count"],
+        detail=report["detail"],
+        required_fields=[label for label, _ in svc.REQUIRED_PROFILE_FIELDS],
+        best=report["best"],
     )
 
 

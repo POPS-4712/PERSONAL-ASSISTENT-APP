@@ -1,5 +1,11 @@
 # Secretos y configuración local
 .env
+# Claves privadas / material criptografico (NUNCA en git)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
 config/user_profile.json
 
 # Datos de contenedores / runtime

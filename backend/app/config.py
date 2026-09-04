@@ -74,11 +74,37 @@ class Settings(BaseSettings):
         default="", validation_alias=AliasChoices("AC_N8N_API_KEY", "N8N_API_KEY")
     )
 
-    # --- Optional sidecar services (Playwright scraper, profile API) ---
+    # --- Gemini / AI provider ---
+    # Also honours the plain GEMINI_API_KEY name already used by the workflows.
+    gemini_api_key: str = Field(
+        default="", validation_alias=AliasChoices("AC_GEMINI_API_KEY", "GEMINI_API_KEY")
+    )
+    gemini_model: str = Field(
+        default="gemini-2.5-flash",
+        validation_alias=AliasChoices("AC_GEMINI_MODEL", "GEMINI_MODEL"),
+    )
+    # How long a successful live Gemini verification is trusted before the
+    # monitor calls the provider again. The monitor loop ticks every few
+    # seconds; re-validating a key that often would waste provider quota.
+    gemini_verify_ttl_seconds: float = 300.0
+
+    # --- Optional sidecar services ---
     # Empty = not deployed in this environment -> the monitor reports
-    # NOT_CONFIGURED instead of OFFLINE. Docker Compose sets these to the
-    # in-network hostnames; a stand-alone backend deploy leaves them unset.
-    playwright_base_url: str = ""
+    # NOT_CONFIGURED instead of OFFLINE. Docker Compose sets this to the
+    # in-network hostname; a stand-alone backend deploy leaves it unset.
+    #
+    # These are only the DEFAULT: `services.service_config` prefers the
+    # `service_configs` table, which the web panel writes, so a user can change
+    # the endpoint without an env edit or a redeploy.
+    playwright_base_url: str = Field(
+        default="", validation_alias=AliasChoices("AC_PLAYWRIGHT_BASE_URL", "PLAYWRIGHT_BASE_URL")
+    )
+    # Deprecated. The `profile` container is a local helper that maintains
+    # config/user_profile.json for the n8n Code nodes; it is NOT what the
+    # monitor means by PROFILE. Since v0.5 that state is computed from the
+    # `profiles` table (see services/profiles.any_complete_profile), because a
+    # reachable sidecar said nothing about whether usable profile data existed.
+    # Kept so an existing .env with this key still loads.
     profile_base_url: str = ""
 
     # --- Monitoring ---

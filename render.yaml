@@ -1,15 +1,32 @@
-# Render Blueprint for the Automation Center backend (FastAPI).
+# Render Blueprint for Automation Center.
 #
-# Deploys backend/Dockerfile UNCHANGED except that it now binds $PORT (Render
-# injects it). Long-running web service (not serverless) so the metrics hub loop
-# and the n8n polling keep running; WebSockets (/ws/monitor, /ws/logs) work
-# natively over wss on *.onrender.com; HTTPS is automatic.
+# Deploys the full production stack:
+#
+#   automation-center-db          Postgres (control plane data)
+#   automation-center-api         FastAPI backend      (public, HTTPS)
+#   automation-center-n8n         n8n                  (public: needs webhooks)
+#   automation-center-playwright  scraper sidecar      (PRIVATE, internal only)
+#
+# The frontend lives on Vercel and talks to automation-center-api over HTTPS.
+#
+# Why these service types:
+#   * the API is a long-running web service (not serverless) so the metrics hub
+#     and n8n polling keep running, and WebSockets work natively over wss;
+#   * n8n must be public because Gmail/Calendar and any inbound webhook have to
+#     reach it, and because you open its editor in a browser;
+#   * Playwright is a private service: nothing outside the Render network has
+#     any business reaching a headless browser, so it is never published.
 #
 # One-time setup (needs a human — browser login):
 #   1. Push this repo to GitHub (Render deploys from a connected Git repo).
 #   2. Render Dashboard -> New -> Blueprint -> pick the repo -> Apply.
-#   3. Set the two secret env vars flagged `sync: false` below in the Dashboard.
-#   4. After the first deploy, set AC_CORS_ORIGINS to the real Vercel origin.
+#   3. Fill in the env vars flagged `sync: false` in the Dashboard.
+#   4. Set AC_CORS_ORIGINS to the real Vercel origin.
+#   5. Open the n8n service URL, create the owner account, then
+#      Settings -> n8n API -> create an API key.
+#   6. Paste that key into Automation Center -> Settings -> Services -> n8n.
+#      (It is stored encrypted in Postgres and applies on the next health
+#      check — no redeploy, and no need to touch the Render dashboard again.)
 # Full runbook: docs/CLOUD-DEPLOYMENT.md
 #
 # No secret values live in this file.
@@ -23,6 +40,7 @@ databases:
     postgresMajorVersion: "16"
 
 services:
+  # ------------------------------------------------------------------ API ----
   - type: web
     name: automation-center-api
     runtime: docker
@@ -50,6 +68,8 @@ services:
         sync: false                    # MUST be a Fernet key (44-char base64url).
                                        # Generate + paste in the Dashboard:
                                        #   python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
+                                       # Also required to store service API keys
+                                       # from the web panel.
       - key: AC_CORS_ORIGINS
         sync: false                    # set to https://tdrassistantproject.vercel.app
                                        # (exact frontend origin; `*` is rejected because
@@ -61,8 +81,147 @@ services:
         value: "10.0.0.0/8"            # Render terminates TLS in front of the app;
                                        # trust its private range so X-Forwarded-For
                                        # is used for rate-limiting
+      # --- integrations -------------------------------------------------------
+      # These are the *fallback*. Anything set from the web panel is stored in
+      # the `service_configs` table and takes precedence, so day-to-day changes
+      # never need a redeploy.
       - key: AC_N8N_BASE_URL
-        sync: false                    # public HTTPS URL of a reachable n8n
-                                       # (a local Docker n8n is NOT reachable from Render)
+        fromService:
+          name: automation-center-n8n
+          type: web
+          property: host               # https://automation-center-n8n.onrender.com
       - key: AC_N8N_API_KEY
+        sync: false                    # created inside n8n after its first boot;
+                                       # easier to paste into the web panel instead
+      - key: AC_PLAYWRIGHT_BASE_URL
+        fromService:
+          name: automation-center-playwright
+          type: pserv
+          property: hostport           # internal host:port, never public
+      - key: AC_GEMINI_API_KEY
+        sync: false                    # Google AI Studio -> Get API key
+      - key: AC_GEMINI_MODEL
+        value: gemini-2.5-flash
+
+  # ------------------------------------------------------------------ n8n ----
+  - type: web
+    name: automation-center-n8n
+    runtime: image
+    region: frankfurt
+    plan: starter                      # n8n needs a persistent instance, not a
+                                       # sleeping free one: schedules must fire.
+    image:
+      url: docker.io/n8nio/n8n:1.121.3
+    healthCheckPath: /healthz
+    # n8n keeps its config (and the encryption key file) on disk. Workflow and
+    # execution data live in Postgres, so this disk stays small.
+    disk:
+      name: n8n-data
+      mountPath: /home/node/.n8n
+      sizeGB: 1
+    envVars:
+      # n8n's own storage, on the same Postgres instance as the control plane.
+      # n8n creates its own tables; it does not touch Automation Center's.
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: automation-center-db
+          property: host
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: automation-center-db
+          property: port
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: automation-center-db
+          property: database
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: automation-center-db
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: automation-center-db
+          property: password
+      - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
+        value: "false"                 # Render's managed Postgres uses its own CA
+      # Encrypts stored n8n credentials. Generated once and kept by Render —
+      # losing it makes every credential inside n8n unreadable, so do not rotate
+      # it casually.
+      - key: N8N_ENCRYPTION_KEY
+        generateValue: true
+      - key: N8N_PORT
+        value: "5678"
+      - key: N8N_PROTOCOL
+        value: https
+      - key: N8N_HOST
+        fromService:
+          name: automation-center-n8n
+          type: web
+          property: hostport
+      - key: WEBHOOK_URL
+        fromService:
+          name: automation-center-n8n
+          type: web
+          property: host
+      - key: N8N_EDITOR_BASE_URL
+        fromService:
+          name: automation-center-n8n
+          type: web
+          property: host
+      - key: GENERIC_TIMEZONE
+        value: Europe/Madrid
+      - key: TZ
+        value: Europe/Madrid
+      - key: N8N_DIAGNOSTICS_ENABLED
+        value: "false"
+      - key: N8N_PERSONALIZATION_ENABLED
+        value: "false"
+      - key: N8N_RUNNERS_ENABLED
+        value: "true"
+      - key: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+        value: "true"
+      - key: EXECUTIONS_DATA_SAVE_ON_ERROR
+        value: all
+      - key: EXECUTIONS_DATA_SAVE_ON_SUCCESS
+        value: all
+      - key: EXECUTIONS_TIMEOUT
+        value: "300"
+      # Consumed by the workflows' HTTP nodes.
+      - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_NOTICIAS_TOKEN
+        sync: false
+      - key: TELEGRAM_TOKEN_MARCA
+        sync: false
+      - key: TELEGRAM_TOKEN_LABORAL
+        sync: false
+      - key: TELEGRAM_TOKEN_EMAIL
+        sync: false
+      - key: PLAYWRIGHT_BASE_URL
+        fromService:
+          name: automation-center-playwright
+          type: pserv
+          property: hostport
+
+  # ----------------------------------------------------------- playwright ----
+  # Private service: reachable only from inside the Render network. A headless
+  # browser that fetches arbitrary URLs must never be exposed to the internet.
+  - type: pserv
+    name: automation-center-playwright
+    runtime: docker
+    region: frankfurt
+    plan: starter                      # Chromium needs more than the free tier
+    dockerfilePath: ./playwright/Dockerfile
+    dockerContext: ./playwright
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: TZ
+        value: Europe/Madrid

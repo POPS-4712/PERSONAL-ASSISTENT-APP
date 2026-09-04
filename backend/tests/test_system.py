@@ -36,7 +36,7 @@ def test_system_status_probes_every_service(client):
     assert r.status_code == 200
     body = r.json()
     by_name = {s["name"]: s for s in body["services"]}
-    assert set(by_name) == {"postgres", "n8n", "playwright", "profile"}
+    assert set(by_name) == {"postgres", "n8n", "playwright", "profile", "gemini"}
 
     # postgres is checked via the application's own engine -> online in the sandbox
     assert by_name["postgres"]["status"] == "online"
@@ -44,14 +44,14 @@ def test_system_status_probes_every_service(client):
 
     # no n8n key / sidecar URLs configured in the test env -> NOT_CONFIGURED,
     # which must NOT count as an outage.
-    for name in ("n8n", "playwright", "profile"):
+    for name in ("n8n", "playwright", "profile", "gemini"):
         assert by_name[name]["status"] == "not_configured"
         assert by_name[name]["online"] is None
 
     assert body["state"] == "operational"
     assert body["operational"] is True
     assert body["degraded_services"] == []
-    assert set(body["not_configured_services"]) == {"n8n", "playwright", "profile"}
+    assert set(body["not_configured_services"]) == {"n8n", "playwright", "profile", "gemini"}
 
     # target strings must never leak a connection URL with credentials
     assert by_name["postgres"]["target"] == "application database"

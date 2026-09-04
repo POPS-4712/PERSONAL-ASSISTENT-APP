@@ -42,8 +42,23 @@ def health(db: Session = Depends(get_db)) -> HealthOut:
 
 @router.get("/system/status", response_model=SystemStatusOut)
 async def status() -> SystemStatusOut:
-    """Live probe of every service in the stack."""
+    """Live probe of every service in the stack.
+
+    Cheap enough to poll: cached provider verdicts are reused. Use
+    `POST /system/check` for a forced, uncached re-probe.
+    """
     return SystemStatusOut.model_validate(await system_status())
+
+
+@router.post("/system/check", response_model=SystemStatusOut)
+async def check(_: User = Depends(get_current_user)) -> SystemStatusOut:
+    """Force a real, uncached re-probe of every service (CHECK SERVICES).
+
+    Authenticated because it makes the backend originate outbound requests to
+    every configured endpoint; leaving that open would let anyone use the API
+    as a traffic amplifier.
+    """
+    return SystemStatusOut.model_validate(await system_status(force=True))
 
 
 @router.get("/system/metrics", response_model=HostMetricsOut)

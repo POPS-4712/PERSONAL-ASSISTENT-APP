@@ -80,7 +80,7 @@ services:
       postgres:
         condition: service_healthy
       playwright:
-        condition: service_started
+        condition: service_healthy
     networks:
       - assistant
     healthcheck:
@@ -154,10 +154,16 @@ services:
       AC_N8N_BASE_URL: ${AC_N8N_BASE_URL:-http://n8n:5678}
       # Prefer AC_N8N_API_KEY (from .env); fall back to a plain N8N_API_KEY.
       AC_N8N_API_KEY: ${AC_N8N_API_KEY:-${N8N_API_KEY:-}}
-      # Sidecar services reachable on the compose network — the monitor probes
-      # these. A stand-alone deploy (Render) leaves them unset -> NOT_CONFIGURED.
+      # Playwright sidecar on the compose network — the monitor probes it.
+      # A stand-alone deploy (Render) leaves it unset -> NOT_CONFIGURED.
       AC_PLAYWRIGHT_BASE_URL: ${AC_PLAYWRIGHT_BASE_URL:-http://playwright:3000}
-      AC_PROFILE_BASE_URL: ${AC_PROFILE_BASE_URL:-http://profile:7777}
+      # NOTE: the monitor's PROFILE state is not an HTTP probe. It reads the
+      # `profiles` table and checks the data is actually usable, so there is no
+      # AC_PROFILE_BASE_URL here. The `profile` container below is a local
+      # helper that maintains config/user_profile.json for the n8n Code nodes.
+      # --- AI provider ---
+      AC_GEMINI_API_KEY: ${AC_GEMINI_API_KEY:-${GEMINI_API_KEY:-}}
+      AC_GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       AC_COMPOSE_PROJECT: personal-assistant
       TZ: ${TZ}
     depends_on:
@@ -186,9 +192,16 @@ services:
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - assistant
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:

@@ -3,11 +3,12 @@ import {
   credentialsApi,
   n8nApi,
   profilesApi,
+  servicesApi,
   systemApi,
   type CredentialInput,
   type ProfileInput,
 } from "@/api";
-import type { N8nHealth } from "@/api/types";
+import type { N8nHealth, ServiceConfigUpdate } from "@/api/types";
 
 export const qk = {
   health: ["health"] as const,
@@ -17,6 +18,8 @@ export const qk = {
   profiles: ["profiles"] as const,
   profile: (id: string) => ["profiles", id] as const,
   profileDimensions: ["profiles", "dimensions"] as const,
+  profileCompleteness: ["profiles", "completeness"] as const,
+  serviceConfigs: ["services", "config"] as const,
   credentials: ["credentials"] as const,
   credentialStore: ["credentials", "store-status"] as const,
   n8nHealth: ["n8n", "health"] as const,
@@ -56,6 +59,53 @@ export function useSystemMetrics(enabled = true) {
   });
 }
 
+/**
+ * Forced re-probe. Invalidates the cached status so every consumer (the
+ * monitoring page, the dashboard tiles) reflects the fresh result at once.
+ */
+export function useForceServiceCheck() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => systemApi.check(),
+    onSuccess: (data) => {
+      qc.setQueryData(qk.systemStatus, data);
+      qc.invalidateQueries({ queryKey: qk.serviceConfigs });
+      qc.invalidateQueries({ queryKey: qk.n8nHealth });
+    },
+  });
+}
+
+/* ----------------------- service configuration ------------------------ */
+
+export function useServiceConfigs() {
+  return useQuery({
+    queryKey: qk.serviceConfigs,
+    queryFn: async () => (await servicesApi.list()).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useServiceConfigMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: qk.serviceConfigs });
+    // configuration changes what the monitor probes, so refresh it too
+    qc.invalidateQueries({ queryKey: qk.systemStatus });
+    qc.invalidateQueries({ queryKey: qk.n8nHealth });
+  };
+  return {
+    save: useMutation({
+      mutationFn: (v: { service: string; input: ServiceConfigUpdate }) =>
+        servicesApi.update(v.service, v.input),
+      onSuccess: invalidate,
+    }),
+    test: useMutation({
+      mutationFn: (service: string) => servicesApi.test(service),
+      onSuccess: invalidate,
+    }),
+  };
+}
+
 export function useLogsBacklog(params: { level?: string; limit?: number; source?: string }) {
   return useQuery({
     queryKey: qk.logs(params),
@@ -86,10 +136,22 @@ export function useProfileDimensions() {
   });
 }
 
+/** Does the signed-in user have a profile the automations can actually use? */
+export function useProfileCompleteness() {
+  return useQuery({
+    queryKey: qk.profileCompleteness,
+    queryFn: profilesApi.completeness,
+    staleTime: 30_000,
+  });
+}
+
 export function useProfileMutations() {
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: qk.profiles });
+    // editing a profile can flip the PROFILE tile on /monitoring
+    qc.invalidateQueries({ queryKey: qk.profileCompleteness });
+    qc.invalidateQueries({ queryKey: qk.systemStatus });
   };
   return {
     create: useMutation({ mutationFn: (input: ProfileInput) => profilesApi.create(input), onSuccess: invalidate }),

@@ -9,9 +9,23 @@ export interface MonitorServiceStatus {
   name: string;
   status: ServiceStatus;
   online: boolean | null;
+  configured: boolean;
   latency_ms: number | null;
   detail: string;
   updatedAt: string;
+}
+
+/** Healthy statuses. `configured` is the healthy state for services you cannot
+ *  ping (profile data, an accepted API key). */
+const HEALTHY: ServiceStatus[] = ["online", "configured"];
+const FAILED: ServiceStatus[] = ["offline", "invalid"];
+
+/** Dashboard reading order: infrastructure first, then integrations. */
+export const SERVICE_ORDER = ["postgres", "n8n", "playwright", "profile", "gemini"];
+
+export function serviceRank(name: string): number {
+  const i = SERVICE_ORDER.indexOf(name);
+  return i === -1 ? SERVICE_ORDER.length : i;
 }
 
 export interface MonitorPoint {
@@ -35,8 +49,10 @@ interface ServiceEvent {
   timestamp: string;
   service: string;
   status: ServiceStatus;
+  configured?: boolean;
   latency_ms: number | null;
   detail: string;
+  checked_at?: string;
 }
 
 const HISTORY_LIMIT = 60;
@@ -82,10 +98,15 @@ export function useMonitorWebSocket(): MonitorState {
             [s.service]: {
               name: s.service,
               status: s.status,
-              online: s.status === "online" ? true : s.status === "offline" ? false : null,
+              online: HEALTHY.includes(s.status)
+                ? true
+                : FAILED.includes(s.status)
+                  ? false
+                  : null,
+              configured: s.configured ?? s.status !== "not_configured",
               latency_ms: s.latency_ms,
               detail: s.detail,
-              updatedAt: s.timestamp,
+              updatedAt: s.checked_at ?? s.timestamp,
             },
           }));
         }
@@ -106,7 +127,10 @@ export function useMonitorWebSocket(): MonitorState {
   }, []);
 
   const serviceList = useMemo(
-    () => Object.values(services).sort((a, b) => a.name.localeCompare(b.name)),
+    () =>
+      Object.values(services).sort(
+        (a, b) => serviceRank(a.name) - serviceRank(b.name) || a.name.localeCompare(b.name),
+      ),
     [services],
   );
 

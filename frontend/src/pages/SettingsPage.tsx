@@ -1,8 +1,9 @@
 import { useAuth } from "@/stores/auth";
 import { useTheme } from "@/stores/theme";
-import { n8nStateOf, useHealth, useN8nHealth, useSystemStatus } from "@/hooks/queries";
+import { n8nStateOf, useHealth, useN8nHealth, useServiceConfigs, useSystemStatus } from "@/hooks/queries";
 import { Badge, Card, CardTitle, PageHeader, Select } from "@/components/ui";
-import { ServiceRow } from "@/components/common";
+import { QueryBoundary, ServiceRow } from "@/components/common";
+import { ServiceConfigCard } from "@/pages/settings/ServiceConfigCard";
 import { API_URL, APP_ENV, WS_URL } from "@/config";
 import { formatDateTime } from "@/utils/format";
 
@@ -13,10 +14,34 @@ export function SettingsPage() {
   const status = useSystemStatus();
   const n8n = useN8nHealth();
   const n8nState = n8nStateOf(n8n.data, n8n.isError);
+  const serviceConfigs = useServiceConfigs();
+  const canEdit = user?.role === "admin";
 
   return (
     <div>
-      <PageHeader title="Settings" description="Preferences and connection details. No secrets are shown here." />
+      <PageHeader title="Settings" description="Preferences and connections. No secret is ever shown here." />
+
+      <Card className="mb-4">
+        <CardTitle>Services</CardTitle>
+        <p className="mb-3 text-xs text-muted">
+          Point the platform at your own n8n, scraper and AI provider. Saved here, these values take
+          precedence over the server environment and apply on the next health check — no redeploy,
+          no <code>.env</code> editing.
+        </p>
+        <QueryBoundary
+          isLoading={serviceConfigs.isLoading}
+          isError={serviceConfigs.isError}
+          error={serviceConfigs.error}
+          onRetry={() => serviceConfigs.refetch()}
+          skeletonRows={3}
+        >
+          <div className="grid gap-4 lg:grid-cols-3">
+            {(serviceConfigs.data ?? []).map((config) => (
+              <ServiceConfigCard key={config.service} config={config} canEdit={!!canEdit} />
+            ))}
+          </div>
+        </QueryBoundary>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -126,7 +151,15 @@ export function SettingsPage() {
           </dl>
           <div className="mt-3 border-t border-border pt-2">
             {status.data?.services.map((s) => (
-              <ServiceRow key={s.name} name={s.name} online={s.online} latency={s.latency_ms} />
+              <ServiceRow
+                key={s.name}
+                name={s.name}
+                status={s.status}
+                online={s.online}
+                latency={s.latency_ms}
+                detail={s.detail}
+                checkedAt={s.checked_at}
+              />
             ))}
           </div>
         </Card>

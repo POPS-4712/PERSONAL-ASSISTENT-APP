@@ -15,8 +15,12 @@ import logging
 from typing import Any
 
 import httpx
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.db import get_db
+from app.services import service_config
 
 log = logging.getLogger("n8n")
 
@@ -216,5 +220,14 @@ class N8nService:
         return out
 
 
-def get_n8n_service() -> N8nService:
-    return N8nService()
+def get_n8n_service(db: Session = Depends(get_db)) -> N8nService:
+    """FastAPI dependency.
+
+    Resolves the endpoint and API key through `service_config`, so the panel's
+    settings drive the Automations pages exactly as they drive the health
+    monitor. Without this the two would disagree: the dashboard would show a
+    panel-configured n8n as online while these routes still called the address
+    baked into the environment.
+    """
+    resolved = service_config.resolve(db, "n8n")
+    return N8nService(base_url=resolved.base_url, api_key=resolved.secret)

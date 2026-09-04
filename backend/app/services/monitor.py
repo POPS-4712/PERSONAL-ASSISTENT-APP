@@ -90,8 +90,10 @@ class MetricsHub:
                         "timestamp": ts,
                         "service": s.name,
                         "status": s.status,
+                        "configured": s.configured,
                         "latency_ms": s.latency_ms,
                         "detail": s.detail,
+                        "checked_at": s.checked_at,
                     }
                 )
         except Exception as exc:  # noqa: BLE001

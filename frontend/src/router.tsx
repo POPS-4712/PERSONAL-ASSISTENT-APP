@@ -14,6 +14,7 @@ import { ExecutionsPage } from "@/pages/ExecutionsPage";
 import { MonitoringPage } from "@/pages/MonitoringPage";
 import { LogsPage } from "@/pages/LogsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { SetupPage } from "@/pages/SetupPage";
 import { AdminUsersPage, AdminSecurityPage, AdminSystemPage } from "@/pages/AdminPages";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
@@ -72,6 +73,7 @@ export const routes: RouteObject[] = [
           { path: "monitoring", element: <MonitoringPage /> },
           { path: "logs", element: <LogsPage /> },
           { path: "settings", element: <SettingsPage /> },
+          { path: "setup", element: <SetupPage /> },
           {
             path: "admin",
             element: <RequireAdmin />,

@@ -5,14 +5,20 @@ from pydantic import BaseModel
 
 class ServiceStateOut(BaseModel):
     name: str
-    kind: str
+    kind: str  # db | http | data | provider
     target: str
-    # online | offline | not_configured | unknown
+    # online | configured | degraded | invalid | offline | not_configured | unknown
     status: str
-    # kept for backward compatibility: true/false for online/offline, null otherwise
+    # kept for backward compatibility: true for online/configured, false for
+    # offline/invalid, null for everything else
     online: bool | None
+    # whether this environment has the service set up at all - the distinction
+    # the dashboard needs to avoid showing "offline" for something nobody asked for
+    configured: bool = False
     detail: str
     latency_ms: float | None
+    checked_at: str = ""
+    meta: dict = {}
 
 
 class SystemStatusOut(BaseModel):

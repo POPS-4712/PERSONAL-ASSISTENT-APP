@@ -41,3 +41,24 @@ class ProfileOut(BaseModel):
 class ProfileDimensionsOut(BaseModel):
     dimensions: list[str]
     note: str
+
+
+class ProfileCompletenessReport(BaseModel):
+    profile_id: str
+    name: str
+    complete: bool
+    filled: list[str]
+    missing: list[str]
+    score: float
+
+
+class ProfileCompletenessOut(BaseModel):
+    """Whether the caller has a profile the automations can actually use."""
+
+    configured: bool
+    profile_count: int
+    detail: str
+    #: the required fields, so the UI can render the checklist without
+    #: hard-coding a copy of the backend rule
+    required_fields: list[str]
+    best: ProfileCompletenessReport | None = None

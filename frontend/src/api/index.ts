@@ -9,7 +9,11 @@ import type {
   N8nHealth,
   N8nWorkflow,
   Profile,
+  ProfileCompleteness,
   ProfileDimensions,
+  ServiceConfig,
+  ServiceConfigUpdate,
+  ServiceTestResult,
   SystemStatus,
   TokenResponse,
   User,
@@ -29,6 +33,8 @@ export const systemApi = {
   health: (signal?: AbortSignal) => api.getPublic<HealthResponse>("/api/health", signal),
   status: (signal?: AbortSignal) => api.getPublic<SystemStatus>("/api/system/status", signal),
   metrics: (signal?: AbortSignal) => api.getPublic<HostMetrics>("/api/system/metrics", signal),
+  /** Forced, uncached re-probe of every service (the CHECK SERVICES button). */
+  check: () => api.post<SystemStatus>("/api/system/check"),
   logs: (params: { level?: string; limit?: number; source?: string } = {}) =>
     api.get<{ data: LogEntry[]; count: number }>("/api/logs", {
       level: params.level,
@@ -48,6 +54,7 @@ export const profilesApi = {
   list: () => api.get<Profile[]>("/api/profiles"),
   get: (id: string) => api.get<Profile>(`/api/profiles/${id}`),
   dimensions: () => api.get<ProfileDimensions>("/api/profiles/dimensions"),
+  completeness: () => api.get<ProfileCompleteness>("/api/profiles/completeness"),
   create: (input: ProfileInput) => api.post<Profile>("/api/profiles", input),
   update: (
     id: string,
@@ -80,6 +87,18 @@ export const credentialsApi = {
   ) => api.patch<Credential>(`/api/credentials/${id}`, input),
   remove: (id: string) => api.del<{ deleted: boolean }>(`/api/credentials/${id}`),
   test: (id: string) => api.post<CredentialTestResult>(`/api/credentials/${id}/test`),
+};
+
+/**
+ * Integration configuration, editable from the panel. Writes are admin-only on
+ * the backend; the UI hides the controls for everyone else.
+ */
+export const servicesApi = {
+  list: () => api.get<{ data: ServiceConfig[] }>("/api/services/config"),
+  get: (service: string) => api.get<ServiceConfig>(`/api/services/config/${service}`),
+  update: (service: string, input: ServiceConfigUpdate) =>
+    api.put<ServiceConfig>(`/api/services/config/${service}`, input),
+  test: (service: string) => api.post<ServiceTestResult>(`/api/services/config/${service}/test`),
 };
 
 export const n8nApi = {

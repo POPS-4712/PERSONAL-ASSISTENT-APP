@@ -30,6 +30,140 @@ PROFILE_DIMENSIONS: tuple[str, ...] = (
 )
 
 
+#: What the product considers a *usable* profile (Phase 5).
+#:
+#: Each entry is (label, accepted configuration keys). A requirement is met when
+#: at least one of its keys carries a non-empty value, so a panel form that
+#: writes literal Spanish field names and the older `modules.json` dimension
+#: names both satisfy it without a migration.
+#:
+#: The profile must be more than an existing row: an empty `configuration` is
+#: explicitly NOT configured.
+REQUIRED_PROFILE_FIELDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("profesion", ("profesion", "sector", "objetivo_profesional", "formacion")),
+    ("ubicacion", ("ubicacion", "ubicacion_laboral", "localizacion")),
+    ("intereses", ("intereses", "temas", "topics")),
+    (
+        "preferencias",
+        (
+            "preferencias",
+            "preferencias_laborales",
+            "preferencias_noticias",
+            "modalidad",
+            "automatizaciones",
+        ),
+    ),
+)
+
+
+def _has_value(configuration: dict, key: str) -> bool:
+    """A key counts only when it holds real content.
+
+    Empty strings, empty lists and lists of blank strings are treated as unset -
+    the UI writes `[]` for an untouched multi-select, and that must not make a
+    profile look complete.
+    """
+    if key not in configuration:
+        return False
+    value = configuration[key]
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set)):
+        return any(str(v).strip() for v in value)
+    if isinstance(value, dict):
+        return bool(value)
+    return True
+
+
+def profile_completeness(profile: Profile) -> dict:
+    """Report whether one profile carries the minimum data the automations need.
+
+    Returned shape is stable and safe to expose: it names the *missing fields*,
+    never their values.
+    """
+    configuration = profile.configuration or {}
+    filled: list[str] = []
+    missing: list[str] = []
+    for label, keys in REQUIRED_PROFILE_FIELDS:
+        (filled if any(_has_value(configuration, k) for k in keys) else missing).append(label)
+
+    if not (profile.name or "").strip():
+        missing.insert(0, "name")
+    if not profile.is_active:
+        missing.append("active")
+
+    total = len(REQUIRED_PROFILE_FIELDS)
+    return {
+        "profile_id": str(profile.id),
+        "name": profile.name,
+        "complete": not missing,
+        "filled": filled,
+        "missing": missing,
+        "score": round(len(filled) / total, 2) if total else 1.0,
+    }
+
+
+def completeness_for_user(db: Session, user_id: uuid.UUID) -> dict:
+    """Completeness of the user's primary profile (or the best one they have)."""
+    rows = list_profiles(db, user_id)
+    if not rows:
+        return {
+            "configured": False,
+            "profile_count": 0,
+            "detail": "no profile created yet",
+            "best": None,
+        }
+    reports = [profile_completeness(r) for r in rows]
+    best = max(reports, key=lambda r: (r["complete"], r["score"]))
+    return {
+        "configured": bool(best["complete"]),
+        "profile_count": len(rows),
+        "detail": (
+            f"profile '{best['name']}' is complete"
+            if best["complete"]
+            else "missing: " + ", ".join(best["missing"])
+        ),
+        "best": best,
+    }
+
+
+def any_complete_profile(db: Session) -> dict:
+    """Instance-wide answer for the health dashboard.
+
+    Deliberately aggregate: it says *whether* a usable profile exists and how
+    many profiles there are, and never returns anyone's profile content, so the
+    monitoring endpoint leaks nothing personal.
+    """
+    total = db.scalar(select(func.count()).select_from(Profile)) or 0
+    if total == 0:
+        return {"configured": False, "profile_count": 0, "detail": "no profile created yet"}
+
+    complete = 0
+    shortest_missing: list[str] | None = None
+    for row in db.scalars(select(Profile).where(Profile.is_active.is_(True))):
+        report = profile_completeness(row)
+        if report["complete"]:
+            complete += 1
+        elif shortest_missing is None or len(report["missing"]) < len(shortest_missing):
+            shortest_missing = report["missing"]
+
+    if complete:
+        return {
+            "configured": True,
+            "profile_count": total,
+            "complete_profiles": complete,
+            "detail": f"{complete} complete profile(s)",
+        }
+    return {
+        "configured": False,
+        "profile_count": total,
+        "complete_profiles": 0,
+        "detail": "profile incomplete, missing: " + ", ".join(shortest_missing or ["configuration"]),
+    }
+
+
 class ProfileError(Exception):
     def __init__(self, message: str, status_code: int = 400):
         super().__init__(message)

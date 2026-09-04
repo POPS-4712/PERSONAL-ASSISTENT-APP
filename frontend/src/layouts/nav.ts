@@ -6,6 +6,7 @@ import {
   IconList,
   IconProfiles,
   IconPulse,
+  IconRocket,
   IconSettings,
   IconShield,
   IconTerminal,
@@ -20,6 +21,7 @@ export interface NavItem {
 
 export const primaryNav: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: IconDashboard },
+  { to: "/setup", label: "Setup", icon: IconRocket },
   { to: "/profiles", label: "Profiles", icon: IconProfiles },
   { to: "/credentials", label: "Credentials", icon: IconKey },
   { to: "/automations", label: "Automations", icon: IconBolt },

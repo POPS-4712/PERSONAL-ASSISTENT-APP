@@ -16,6 +16,8 @@ for _leak in (
     "N8N_URL",
     "AC_PLAYWRIGHT_BASE_URL",
     "AC_PROFILE_BASE_URL",
+    "GEMINI_API_KEY",
+    "AC_GEMINI_API_KEY",
 ):
     os.environ.pop(_leak, None)
 # A real Fernet key so the credential-manager tests exercise real encryption.
@@ -65,7 +67,7 @@ def db_session(session_factory):
 
 
 @pytest.fixture
-def client(engine, session_factory):
+def client(engine, session_factory, monkeypatch):
     app = create_app()
 
     def _get_db():
@@ -76,6 +78,16 @@ def client(engine, session_factory):
             db.close()
 
     app.dependency_overrides[get_db] = _get_db
+
+    # The service monitor opens its own sessions (it runs outside a request, in
+    # the metrics-hub loop), so overriding get_db is not enough — point it at
+    # the same in-memory database or every probe would read an empty schema.
+    from app.services import services_probe
+
+    monkeypatch.setattr(services_probe, "_session_factory", lambda: session_factory)
+    services_probe.reset_gemini_cache()
+
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    services_probe.reset_gemini_cache()

@@ -42,6 +42,14 @@ export const IconBolt = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const IconRocket = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M5 13c-1.5 1.5-2 5-2 5s3.5-.5 5-2" />
+    <path d="M14.5 4.5C17 2 21 3 21 3s1 4-1.5 6.5L14 15l-5-5z" />
+    <path d="m9 10-4 1 3 3 1-4" />
+  </svg>
+);
+
 export const IconList = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
